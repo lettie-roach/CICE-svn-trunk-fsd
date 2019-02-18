@@ -16,6 +16,7 @@
 ! 2009 D Bailey and ECH: Generalized for multiple frequency output
 ! 2010 Alison McLaren and ECH: Added 3D capability
 ! 2013 ECH split from ice_history.F90
+! 2016 Lettie Roach: Added nfsd dimension to write FSTD
 
       module ice_history_write
 
@@ -71,12 +72,13 @@
 
       integer (kind=int_kind) :: i,k,ic,n,nn, &
          ncid,status,imtid,jmtid,kmtidi,kmtids,kmtidb, cmtid,timid,varid, &
-         nvertexid,ivertex
+         nvertexid,ivertex, &
+         kmtidf ! LR
       integer (kind=int_kind), dimension(3) :: dimid
       integer (kind=int_kind), dimension(4) :: dimidz
       integer (kind=int_kind), dimension(5) :: dimidcz
       integer (kind=int_kind), dimension(3) :: dimid_nverts
-      integer (kind=int_kind), dimension(4) :: dimidex
+      integer (kind=int_kind), dimension(5) :: dimidex ! LR 4->5
       real (kind=real_kind) :: ltime
       character (char_len) :: title
       character (char_len_long) :: ncfile(max_nstrm)
@@ -165,6 +167,11 @@
         if (status /= nf90_noerr) call abort_ice( &
                       'ice: Error defining dim nkb')
 
+! LR
+        status = nf90_def_dim(ncid,'nkfsd',nfsd_hist,kmtidf)
+        if (status /= nf90_noerr) call abort_ice( &
+                      'ice: Error defining dim nkf')
+! LR
         status = nf90_def_dim(ncid,'time',NF90_UNLIMITED,timid)
         if (status /= nf90_noerr) call abort_ice( &
                       'ice: Error defining dim time')
@@ -262,7 +269,10 @@
       var_nz(2) = coord_attributes('VGRDi', 'vertical ice levels', '1')
       var_nz(3) = coord_attributes('VGRDs', 'vertical snow levels', '1')
       var_nz(4) = coord_attributes('VGRDb', 'vertical ice-bio levels', '1')
-
+! LR
+      var_nz(5) = coord_attributes('NFSD','category lower bound floe
+      diameter','m')
+! LR
       !-----------------------------------------------------------------
       ! define information for optional time-invariant variables
       !-----------------------------------------------------------------
@@ -354,6 +364,7 @@
           dimidex(2)=kmtidi
           dimidex(3)=kmtids
           dimidex(4)=kmtidb
+          dimidex(5)=kmtidf ! LR
         
         do i = 1, nvarz
            if (igrdz(i)) then
@@ -630,18 +641,56 @@
 
           endif
         enddo  ! num_avail_hist_fields_3Db
+! LR 
+        dimidz(1) = imtid
+        dimidz(2) = jmtid
+        dimidz(3) = kmtidf
+        dimidz(4) = timid
 
+        do n = n3Dbcum + 1, n3Dfcum
+          if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
+            status  = nf90_def_var(ncid, avail_hist_fields(n)%vname, &
+                         nf90_float, dimidz, varid)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining variable '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'units', &
+                        avail_hist_fields(n)%vunit)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining units for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid, 'long_name', &
+                        avail_hist_fields(n)%vdesc)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining long_name for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'coordinates', &
+                        avail_hist_fields(n)%vcoord)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining coordinates for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'cell_measures', &
+                        avail_hist_fields(n)%vcellmeas)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining cell measures for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'missing_value',spval)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining missing_value for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'_FillValue',spval)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining _FillValue for '//avail_hist_fields(n)%vname)
+
+          endif
+        enddo  ! num_avail_hist_fields_3Df
+! LR 
+ 
         dimidcz(1) = imtid
         dimidcz(2) = jmtid
         dimidcz(3) = kmtidi
         dimidcz(4) = cmtid
         dimidcz(5) = timid
 
-        do n = n3Dbcum + 1, n4Dicum
+        do n = n3Dfcum + 1, n4Dicum ! LR
           if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
             status  = nf90_def_var(ncid, avail_hist_fields(n)%vname, &
 !                             nf90_float, dimidcz, varid)
-                             nf90_float, dimidcz(1:4), varid) ! ferret    
+                             nf90_float, dimidcz(1:5), varid) ! ferret    LR 4->5
             if (status /= nf90_noerr) call abort_ice( &
                'Error defining variable '//avail_hist_fields(n)%vname)
             status = nf90_put_att(ncid,varid,'units', &
@@ -694,7 +743,7 @@
           if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
             status  = nf90_def_var(ncid, avail_hist_fields(n)%vname, &
 !                             nf90_float, dimidcz, varid)
-                             nf90_float, dimidcz(1:4), varid) ! ferret    
+                             nf90_float, dimidcz(1:5), varid) ! ferret    LR 4-> 5
             if (status /= nf90_noerr) call abort_ice( &
                'Error defining variable '//avail_hist_fields(n)%vname)
             status = nf90_put_att(ncid,varid,'units', &
@@ -747,7 +796,7 @@
           if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
             status  = nf90_def_var(ncid, avail_hist_fields(n)%vname, &
 !                             nf90_float, dimidcz, varid)
-                             nf90_float, dimidcz(1:4), varid) ! ferret    
+                             nf90_float, dimidcz(1:5), varid) ! ferret    LR 4->5
             if (status /= nf90_noerr) call abort_ice( &
                'Error defining variable '//avail_hist_fields(n)%vname)
             status = nf90_put_att(ncid,varid,'units', &
@@ -790,6 +839,61 @@
           endif
         enddo  ! num_avail_hist_fields_4Db
 
+! LR 
+        dimidcz(1) = imtid
+        dimidcz(2) = jmtid
+        dimidcz(3) = kmtidf
+        dimidcz(4) = cmtid
+        dimidcz(5) = timid
+
+        do n = n4Dbcum + 1, n4Dfcum
+          if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
+            status  = nf90_def_var(ncid, avail_hist_fields(n)%vname, &
+!                             nf90_float, dimidcz, varid)
+                             nf90_float, dimidcz(1:5), varid) ! ferret    
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining variable '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'units', &
+                        avail_hist_fields(n)%vunit)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining units for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid, 'long_name', &
+                        avail_hist_fields(n)%vdesc)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining long_name for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'coordinates', &
+                        avail_hist_fields(n)%vcoord)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining coordinates for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'cell_measures', &
+                        avail_hist_fields(n)%vcellmeas)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining cell measures for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'missing_value',spval)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining missing_value for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'_FillValue',spval)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining _FillValue for '//avail_hist_fields(n)%vname)
+
+      !-----------------------------------------------------------------
+      ! Add cell_methods attribute to variables if averaged
+      !-----------------------------------------------------------------
+            if (hist_avg) then
+                status = nf90_put_att(ncid,varid,'cell_methods','time: mean')
+                if (status /= nf90_noerr) call abort_ice( &
+                 'Error defining cell methods for '//avail_hist_fields(n)%vname)
+            endif
+
+            if (histfreq(ns) == '1' .or. .not. hist_avg) then
+               status = nf90_put_att(ncid,varid,'time_rep','instantaneous')
+            else
+               status = nf90_put_att(ncid,varid,'time_rep','averaged')
+            endif
+          endif
+         enddo  ! num_avail_hist_fields_4Df
+
+! LR 
       !-----------------------------------------------------------------
       ! global attributes
       !-----------------------------------------------------------------
@@ -954,6 +1058,8 @@
                  status = nf90_put_var(ncid,varid,(/(k, k=1,nzslyr)/))
                CASE ('VGRDb')
                  status = nf90_put_var(ncid,varid,(/(k, k=1,nzblyr)/))
+               CASE('NFSD')
+                 status = nf90_put_var(ncid,varid,(/(k,k=1,nfsd_hist)/)) ! LR
              END SELECT
              if (status /= nf90_noerr) call abort_ice( &
                            'ice: Error writing'//var_nz(i)%short_name)
@@ -1202,7 +1308,7 @@
       work_gr(:,:) = c0
       work_g1(:,:) = c0
 
-      do n = n3Dbcum+1, n4Dicum
+      do n = n3Dbcum+1, n3Dfcum ! LR
         nn = n - n3Dbcum
         if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
           if (my_task == master_task) then
@@ -1210,6 +1316,35 @@
             if (status /= nf90_noerr) call abort_ice( &
                'ice: Error getting varid for '//avail_hist_fields(n)%vname)
           endif
+! LR
+          do k = 1, nfsd_hist
+             call gather_global(work_g1, a3Df(:,:,k,nn,:), &
+                                master_task, distrb_info)
+             work_gr(:,:) = work_g1(:,:)
+
+             if (my_task == master_task) then
+             status  = nf90_put_var(ncid,varid,work_gr(:,:), &
+                                    start=(/        1,        1,k/), &
+                                    count=(/nx_global,ny_global,1/))
+             if (status /= nf90_noerr) call abort_ice( &
+                'ice: Error writing variable '//avail_hist_fields(n)%vname)
+           endif
+           enddo ! k
+        endif
+      enddo ! num_avail_hist_fields_3Df
+
+      work_gr(:,:) = c0
+      work_g1(:,:) = c0
+
+      do n = n3Dfcum+1, n4Dicum
+        nn = n - n3Dfcum
+        if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
+          if (my_task == master_task) then
+            status  = nf90_inq_varid(ncid,avail_hist_fields(n)%vname,varid)
+            if (status /= nf90_noerr) call abort_ice( &
+               'ice: Error getting varid for '//avail_hist_fields(n)%vname)
+          endif
+! LR
           do ic = 1, ncat_hist
              do k = 1, nzilyr
                 call gather_global(work_g1, a4Di(:,:,k,ic,nn,:), &
@@ -1283,6 +1418,36 @@
         endif
       enddo ! num_avail_hist_fields_4Db
 
+! LR
+      work_gr(:,:) = c0
+      work_g1(:,:) = c0
+
+      do n = n4Dbcum+1, n4Dfcum
+        nn = n - n4Dbcum
+        if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
+          if (my_task == master_task) then
+            status  = nf90_inq_varid(ncid,avail_hist_fields(n)%vname,varid)
+            if (status /= nf90_noerr) call abort_ice( &
+               'ice: Error getting varid for '//avail_hist_fields(n)%vname)
+          endif
+          do ic = 1, ncat_hist
+             do k = 1, nfsd_hist
+                call gather_global(work_g1, a4Df(:,:,k,ic,nn,:), &
+                                master_task, distrb_info)
+                work_gr(:,:) = work_g1(:,:)
+                if (my_task == master_task) then
+                  status  = nf90_put_var(ncid,varid,work_gr(:,:), &
+                                         start=(/        1,        1,k,ic/), &
+                                         count=(/nx_global,ny_global,1, 1/))
+                  if (status /= nf90_noerr) call abort_ice( &
+                     'ice: Error writing variable '//avail_hist_fields(n)%vname)
+                endif
+             enddo ! k
+          enddo ! ic
+        endif
+      enddo ! num_avail_hist_fields_4Df
+
+! LR
       deallocate(work_gr)
       deallocate(work_g1)
 

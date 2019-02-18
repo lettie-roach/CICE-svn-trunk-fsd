@@ -39,13 +39,24 @@
       use ice_aerosol, only: faero_default
       use ice_algae, only: get_forcing_bgc
       use ice_calendar, only: istep, istep1, time, dt, stop_now, calendar
-      use ice_forcing, only: get_forcing_atmo, get_forcing_ocn
+      use ice_forcing, only: get_forcing_atmo, get_forcing_ocn, &
+! LR
+                        get_forcing_wave, get_wave_spec
+      use ice_state, only: tr_fsd
+      use ice_wavefracspec, only: wave_spec
+! LR
       use ice_flux, only: init_flux_atm, init_flux_ocn
       use ice_state, only: tr_aero
       use ice_timers, only: ice_timer_start, ice_timer_stop, &
           timer_couple, timer_step
       use ice_zbgc_shared, only: skl_bgc
-
+! LR
+      use ice_wavefracspec, only: wave_spec
+      use ice_domain_size, only: ncat, nfsd, nilyr 
+      use ice_communicate, only: my_task, master_task
+      use ice_constants, only: c0
+      integer (kind=int_kind) :: n,k
+! LR 
    !--------------------------------------------------------------------
    !  initialize error code and step timer
    !--------------------------------------------------------------------
@@ -59,6 +70,15 @@
 
       timeLoop: do
 #endif
+! LR
+         if (tr_fsd) then
+             if (wave_spec) then 
+                call get_wave_spec ! read in wave spectrum in ice
+             else
+                call get_forcing_wave ! wave forcing from data outside ice
+             end if
+         end if
+! LR
 
          call ice_step
 
@@ -134,10 +154,22 @@
       use ice_therm_shared, only: calc_Tsfc
       use ice_timers, only: ice_timer_start, ice_timer_stop, &
           timer_diags, timer_column, timer_thermo, timer_bound, &
-          timer_hist, timer_readwrite
+          timer_hist, timer_readwrite, &
+! LR
+          timer_waves
+! LR
       use ice_algae, only: bgc_diags, write_restart_bgc
       use ice_zbgc, only: init_history_bgc, biogeochemistry
       use ice_zbgc_shared, only: skl_bgc
+! LR
+      use ice_state, only: tr_fsd,trcrn, nt_qice, aicen
+      use ice_fsd, only: write_restart_fsd 
+      use ice_wavebreaking, only: wave_break, find_wave
+      use ice_wavefracspec, only: wave_spec,  wave_frac_fsd
+      use ice_state, only: nt_fsd
+      use ice_domain_size, only: ncat, nfsd 
+      use ice_constants
+! LR
 
       integer (kind=int_kind) :: &
          iblk        , & ! block index 
@@ -159,6 +191,14 @@
          call init_history_bgc
          call ice_timer_stop(timer_diags)   ! diagnostics/history
 
+! LR
+        ! Find waves and reconstruct spectrum
+        call ice_timer_start(timer_waves)
+
+        if ((tr_fsd).and.(.NOT.wave_spec)) call find_wave
+
+        call ice_timer_stop(timer_waves)        
+! LR 
          call ice_timer_start(timer_column)  ! column physics
          call ice_timer_start(timer_thermo)  ! thermodynamics
 
@@ -191,9 +231,24 @@
       ! dynamics, transport, ridging
       !-----------------------------------------------------------------
 
-         do k = 1, ndtd
-            call step_dynamics (dt_dyn, ndtd)
-         enddo
+! LR
+        ! Modify the floe size distribution according to ocean surface wave
+        ! fracture 
+        call ice_timer_start(timer_waves)
+
+        if (tr_fsd) then
+            if (wave_spec) then
+                call wave_frac_fsd
+            else
+                call wave_break
+            end if
+        end if
+
+        call ice_timer_stop(timer_waves)        
+! LR
+        do k = 1, ndtd
+            call step_dynamics (dt_dyn, ndtd) 
+        enddo
 
       !-----------------------------------------------------------------
       ! albedo, shortwave radiation
@@ -245,6 +300,9 @@
             call dumpfile     ! core variables for restarting
             if (tr_iage)      call write_restart_age
             if (tr_FY)        call write_restart_FY
+! CMB
+            if (tr_fsd)       call write_restart_fsd
+! CMB
             if (tr_lvl)       call write_restart_lvl
             if (tr_pond_cesm) call write_restart_pond_cesm
             if (tr_pond_lvl)  call write_restart_pond_lvl

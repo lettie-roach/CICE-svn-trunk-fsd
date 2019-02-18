@@ -8,11 +8,18 @@
 !          William H. Lipscomb, LANL
 !
 ! 2008 ECH: created module by moving subroutines from drivers/cice4/
+! 2016 C. M. Bitz and Lettie Roach: Added floe size dependent
+!                                   processes
 
       module ice_step_mod
 
       use ice_constants
       use ice_kinds_mod
+! LR
+      use ice_domain_size, only: ncat, nfsd
+      use ice_state, only: nt_fsd, tr_fsd
+      use ice_communicate, only:my_task, master_task
+! LR
       implicit none
       private
       save
@@ -193,6 +200,15 @@
       use ice_therm_shared, only: calc_Tsfc
       use ice_therm_vertical, only: frzmlt_bottom_lateral, thermo_vertical
       use ice_timers, only: ice_timer_start, ice_timer_stop, timer_ponds
+! LR CMB liuxy
+      use ice_flux, only: fbottom, flateral, lead_area, latsurf_area
+      use ice_fsd_thermo, only: partition_area
+      use ice_domain_size, only: nfsd
+      use ice_fsd, only: frzmlt_bottom_lateral_fsd, renorm_mfstd
+      use ice_flux, only: rside_itd
+      use ice_itd, only: hin_max_init
+! LR CMB liuxy
+
 
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
@@ -231,7 +247,7 @@
       ! other local variables
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
          Tbot        , & ! ice bottom surface temperature (deg C)
-         fbot        , & ! ice-ocean heat flux at bottom surface (W/m^2)
+! LR removed fbot - probably can be tidied up
          shcoef      , & ! transfer coefficient for sensible heat
          lhcoef          ! transfer coefficient for latent heat
 
@@ -310,9 +326,50 @@
       ! Adjust frzmlt to account for ice-ocean heat fluxes since last
       !  call to coupler.
       ! Compute lateral and bottom heat fluxes.
+      ! LR: various options for fsd thermodynamics
       !-----------------------------------------------------------------
+! LR                      
+        if (tr_fsd) then
+              ! renormalize areal mFSTD (should already be normalized by
+              ! time evolution equations, but other changes eg. transport
+              ! may result in it being not quite normalized) 
+              call renorm_mfstd (nx_block, ny_block,ncat,nfsd,aicen(:,:,:,iblk), &
+                               trcrn(:,:,:,:,iblk))
 
-         call frzmlt_bottom_lateral                                      &
+              ! calculate various areas required to partition fluxes
+              call partition_area (nx_block, ny_block,                &
+                                        ilo, ihi, jlo, jhi,             &
+                                        ntrcr,                          &
+                                        aice(:,:,iblk),                 &
+                                        aicen(:,:,:,iblk),              &
+                                        vicen(:,:,:,iblk),              &
+                                        trcrn(:,:,1:ntrcr,:,iblk),      &
+                                        lead_area(:,:,iblk),            &
+                                        latsurf_area(:,:,iblk)          )
+
+
+ 
+              ! calculate heat fluxes (does not change ice or calculate
+              ! rside_itd)   
+              call frzmlt_bottom_lateral_fsd                   &
+                        (nx_block,           ny_block,           &
+                         ilo, ihi,           jlo, jhi,           &
+                         ntrcr,              dt,                 &
+                         aice  (:,:,  iblk), aicen(:,:,:,iblk),  &
+                         lead_area(:,:,iblk),                    &
+                         frzmlt(:,:,  iblk),                     &
+                         vicen (:,:,:,iblk), vsnon (:,:,:,iblk), &
+                         trcrn (:,:,1:ntrcr,:,iblk),             &
+                         sst   (:,:,  iblk), Tf    (:,:,  iblk), &
+                         strocnxT(:,:,iblk), strocnyT(:,:,iblk), &
+                         Tbot,               fbottom(:,:,iblk),  &
+                         flateral(:,:,iblk), Cdn_ocn (:,:,iblk)  )
+
+              
+        else
+
+                ! original thermodynamics, calculates rside
+                call frzmlt_bottom_lateral                               &
                                 (nx_block,           ny_block,           &
                                  ilo, ihi,           jlo, jhi,           &
                                  ntrcr,              dt,                 &
@@ -321,9 +378,11 @@
                                  trcrn (:,:,1:ntrcr,:,iblk),             &
                                  sst   (:,:,  iblk), Tf    (:,:,  iblk), &
                                  strocnxT(:,:,iblk), strocnyT(:,:,iblk), &
-                                 Tbot,               fbot,               &
+                                 Tbot,               fbottom(:,:,iblk),  &
+                                 flateral(:,:,iblk),                     &
                                  rside (:,:,  iblk), Cdn_ocn (:,:,iblk) )
-
+        endif
+! LR
       !-----------------------------------------------------------------
       ! Update the neutral drag coefficients to account for form drag
       ! Oceanic and atmospheric drag coefficients
@@ -506,7 +565,9 @@
                                 flw    (:,:,iblk),   potT (:,:,iblk),     &
                                 Qa     (:,:,iblk),   rhoa (:,:,iblk),     &
                                 fsnow  (:,:,iblk),   fpond (:,:,iblk),    &
-                                fbot,                Tbot,                &
+! LR
+                                fbottom (:,:,iblk),  Tbot,                &
+! LR
                                 sss  (:,:,iblk),                          &
                                 lhcoef,              shcoef,              &
                                 fswsfcn(:,:,n,iblk), fswintn(:,:,n,iblk), &
@@ -746,8 +807,31 @@
           tr_pond_topo
       use ice_therm_shared, only: heat_capacity
       use ice_therm_vertical, only: phi_init, dSin0_frazil
-      use ice_timers, only: ice_timer_start, ice_timer_stop, timer_catconv
+      use ice_timers, only: ice_timer_start, ice_timer_stop, timer_catconv, &
+                            timer_merge, timer_latmelt, & ! LR
+                            timer_addnewice               ! LR
       use ice_zbgc_shared, only: first_ice
+! LR CMB
+      use ice_flux, only: rside_itd, flateral, &
+                          lead_area, latsurf_area, vlateral, &
+                          nearest_wave_hs, nearest_wave_tz, &
+                          cml_nfloes, sst, Tf, &
+                          G_radial, wave_spectrum, wave_hs_in_ice                
+      use ice_fsd_thermo, only: lateral_melt_fsdtherm, &
+                                partition_area, &
+                                floe_merge_thermo, &
+                                add_new_ice_lat
+       use ice_fsd, only:renorm_mfstd, &
+                         write_diag_diff, &
+                         d_afsd_latg, d_amfstd_latg, d_an_latg, &
+                         d_afsd_addnew, d_amfstd_addnew, d_an_addnew, &
+                         d_afsd_latm, d_amfstd_latm, d_an_latm, &
+                         d_afsd_merge, d_amfstd_merge, nfreq, &
+                         d_afsdpi_latm, d_afsdpi_latg, d_afsdpi_addnew
+      use ice_domain_size, only: nfsd, nilyr
+      use ice_grid, only: tarea
+      use ice_state, only: nt_fsd, nt_Tsfc, vice, nt_qice
+! LR CMB
 
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
@@ -759,7 +843,7 @@
 
       integer (kind=int_kind) :: &
          ilo,ihi,jlo,jhi, & ! beginning and end of physical domain
-         i, j
+         i, j, n, k ! LR
 
       integer (kind=int_kind) :: &
          icells          ! number of ice/ocean cells 
@@ -775,6 +859,17 @@
 
       integer (kind=int_kind) :: &
          istop, jstop    ! indices of grid cell where model aborts
+
+! LR
+      real (kind=dbl_kind), dimension (nx_block, ny_block, ncat) :: &
+         aicen_save
+
+      real (kind=dbl_kind), dimension (nx_block, ny_block, nfsd, ncat) :: &
+        amfstd_save
+
+      nfreq = SIZE(wave_spectrum, DIM=3)
+
+! LR
 
       l_stop = .false.
       
@@ -861,6 +956,7 @@
 
       !-----------------------------------------------------------------
       ! Add frazil ice growing in leads.
+      ! LR: different options for different thermodynamics
       !-----------------------------------------------------------------
 
          ! identify ice-ocean cells
@@ -874,8 +970,72 @@
             endif
          enddo               ! i
          enddo               ! j
-            
-         call add_new_ice (nx_block,              ny_block, &
+
+! LR
+
+         call ice_timer_start(timer_addnewice, iblk)
+
+         ! Thermodynamics as Horvat & Tziperman (2015)
+         if (tr_fsd) then
+        
+              ! calculate various areas required to partition fluxes
+               call partition_area (nx_block, ny_block,                &
+                                        ilo, ihi, jlo, jhi,             &
+                                        ntrcr,                          &
+                                        aice(:,:,iblk),                 &
+                                        aicen(:,:,:,iblk),              &
+                                        vicen(:,:,:,iblk),              &
+                                        trcrn(:,:,1:ntrcr,:,iblk),      &
+                                        lead_area(:,:,iblk),            &
+                                        latsurf_area(:,:,iblk)          )
+
+               call add_new_ice_lat (nx_block,  ny_block,     &
+                           ntrcr,     icells,               &
+                           indxi,     indxj,                &
+                           dt,       lead_area(:,:,iblk),   &
+                           latsurf_area(:,:,iblk),          &
+                           aicen     (:,:,:,iblk),          &
+                           trcrn     (:,:,1:ntrcr,:,iblk),  &
+                           vicen     (:,:,:,iblk),          &
+                           aice0     (:,:,  iblk),          &
+                           aice      (:,:,  iblk),          &
+                           frzmlt    (:,:,  iblk),          &
+                           frazil    (:,:,  iblk),          &
+                           vlateral(:,:,iblk),              &
+                           frz_onset (:,:,  iblk), yday,    &
+                           update_ocn_f,                    &
+                           fresh     (:,:,  iblk),          &
+                           fsalt     (:,:,  iblk),          &
+                           Tf        (:,:,  iblk),          &
+                           sss       (:,:,  iblk),          &
+                           salinz    (:,:,:,iblk),          &
+                           phi_init, dSin0_frazil,          &
+                           nbtrcr,                          &
+                           flux_bio  (:,:,1:nbtrcr,iblk),   &
+                           ocean_bio (:,:,1:nbtrcr,iblk),   &
+                           l_stop,                          &
+                           istop                 , jstop,   &
+                           d_an_latg(:,:,:,iblk),           &
+                           d_an_addnew(:,:,:,iblk),         &
+                           d_afsd_latg(:,:,:,iblk),         &
+                           d_afsd_addnew(:,:,:,iblk),       &
+                           d_afsdpi_latg(:,:,:,iblk),       &
+                           d_afsdpi_addnew(:,:,:,iblk),     &
+                           d_amfstd_latg(:,:,:,:,iblk),     &
+                           d_amfstd_addnew(:,:,:,:,iblk),   &
+                           G_radial(:,:,iblk),              &
+                           tarea(:,:,iblk),                 &
+                           wave_spectrum(:,:,:,iblk),       &
+                           wave_hs_in_ice(:,:,iblk) )        
+         
+         else
+                 ! no lateral growth
+                 if (write_diag_diff) then
+                         d_an_latg(:,:,:,iblk) = c0 
+                         aicen_save = aicen(:,:,:,iblk)
+                 end if
+
+                 call add_new_ice (nx_block,      ny_block, &
                            ntrcr,                 icells,   &
                            indxi,                 indxj,    &
                            dt,                              &
@@ -900,7 +1060,14 @@
                            l_stop,                          &
                            istop                 , jstop)
 
-         if (l_stop) then
+                 if (write_diag_diff) d_an_addnew(:,:,:,iblk) =  &
+                        aicen(:,:,:,iblk) - aicen_save
+         end if 
+         
+         call ice_timer_stop(timer_addnewice, iblk)
+
+! LR
+        if (l_stop) then
             write (nu_diag,*) 'istep1, my_task, iblk =', &
                                istep1, my_task, iblk
             write (nu_diag,*) 'Global block:', this_block%block_id
@@ -913,9 +1080,61 @@
 
       !-----------------------------------------------------------------
       ! Melt ice laterally.
+      ! LR: different thermodynamics options
       !-----------------------------------------------------------------
+! LR
+        call ice_timer_start(timer_latmelt, iblk)
 
-         call lateral_melt (nx_block, ny_block,     &
+        if (write_diag_diff) aicen_save = aicen(:,:,:,iblk)
+
+        if (tr_fsd) then
+
+                         if (write_diag_diff) amfstd_save = & 
+                                trcrn(:,:,nt_fsd:nt_fsd+nfsd-1,:,iblk)
+
+                         call lateral_melt_fsdtherm ( &
+                            nx_block, ny_block,    &
+                            ilo, ihi, jlo, jhi,     &
+                            dt,                     &
+                            fpond     (:,:,  iblk), &
+                            fresh     (:,:,  iblk), &
+                            fsalt     (:,:,  iblk), &    
+                            fhocn     (:,:,  iblk), &
+                            faero_ocn (:,:,:,iblk), &
+                            meltl     (:,:,  iblk), &
+                            aice      (:,:,iblk), &
+                            aicen     (:,:,:,iblk), &
+                            vicen     (:,:,:,iblk), &
+                            vsnon     (:,:,:,iblk), &
+                            trcrn     (:,:,:,:,iblk), &
+                            flateral  (:,:,iblk),   & ! computed in therm1
+                            frzmlt    (:,:,iblk),   &
+                            sss       (:,:,iblk),   &
+                            dSin0_frazil, phi_init, &
+                            salinz(:,:,:,iblk)    , &
+                            G_radial(:,:,iblk)  )
+                 
+                         if (write_diag_diff) then
+                              d_amfstd_latm(:,:,:,:,iblk) = &
+                                 trcrn(:,:,nt_fsd:nt_fsd+nfsd-1,:,iblk) - amfstd_save
+                              do k=1,nfsd
+                                d_afsd_latm(:,:,k,iblk) = c0
+                                d_afsdpi_latm(:,:,k,iblk) = c0
+                                do n=1,ncat
+                                        d_afsd_latm(:,:,k,iblk) = d_afsd_latm(:,:,k,iblk)  + &
+                                        (aicen(:,:,n,iblk)*trcrn(:,:,nt_fsd+k-1,n,iblk) - &
+                                        aicen_save(:,:,n) * amfstd_save(:,:,k,n) )
+
+                                        d_afsdpi_latm(:,:,k,iblk) = d_afsdpi_latm(:,:,k,iblk)  + & 
+                                            (aicen(:,:,n,iblk)*trcrn(:,:,nt_fsd+k-1,n,iblk)/SUM(aicen(:,:,:,iblk),DIM=3) - &
+                                            aicen_save(:,:,n) * amfstd_save(:,:,k,n) / SUM(aicen_save,DIM=3) ) 
+                                end do
+                              end do
+                         end if
+                                          
+        else
+
+                call lateral_melt (nx_block, ny_block,     &
                             ilo, ihi, jlo, jhi,     &
                             dt,                     &
                             fpond     (:,:,  iblk), &
@@ -929,6 +1148,31 @@
                             vicen     (:,:,:,iblk), &
                             vsnon     (:,:,:,iblk), &
                             trcrn     (:,:,:,:,iblk))
+        endif
+        
+        if (write_diag_diff) d_an_latm(:,:,:,iblk) = aicen(:,:,:,iblk) - aicen_save
+
+        call ice_timer_stop(timer_latmelt, iblk)
+        call ice_timer_start(timer_merge, iblk)
+
+        if (tr_fsd) then        
+
+                call floe_merge_thermo(iblk,nx_block,  ny_block, &
+                           ntrcr,                 icells,   &
+                           indxi,                 indxj,    &
+                           dt, &
+                           aice      (:,:,  iblk),          &
+                           aicen     (:,:,:,iblk),          &
+                           frzmlt    (:,:,  iblk),          &
+                           trcrn     (:,:,nt_fsd:nt_fsd+nfsd-1,:,iblk),&
+                           d_amfstd_merge(:,:,:,:,iblk),    &
+                           d_afsd_merge(:,:,:,iblk) )  
+
+       
+        end if  
+
+        call ice_timer_stop(timer_merge, iblk)
+! LR
 
       !-----------------------------------------------------------------
       ! For the special case of a single category, adjust the area and

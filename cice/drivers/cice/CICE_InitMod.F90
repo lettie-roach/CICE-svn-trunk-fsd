@@ -64,7 +64,10 @@
       use ice_flux, only: init_coupler_flux, init_history_therm, &
           init_history_dyn, init_flux_atm, init_flux_ocn
       use ice_forcing, only: init_forcing_ocn, init_forcing_atmo, &
-          get_forcing_atmo, get_forcing_ocn
+          get_forcing_atmo, get_forcing_ocn, &
+! LR
+          get_forcing_wave
+! LR
       use ice_grid, only: init_grid1, init_grid2
       use ice_history, only: init_hist, accum_hist
       use ice_restart_shared, only: restart, runid, runtype
@@ -82,6 +85,14 @@
 #ifdef popcice
       use drv_forcing, only: sst_sss
 #endif
+! LR CMB
+      use ice_state, only: tr_fsd
+      use ice_fsd, only: init_fsd_bounds    !CMB
+      use ice_wavebreaking!, only: init_wave ! LR
+      use ice_wavefracspec, only: wave_spec
+      use ice_communicate, only: my_task, master_task !LR
+      use ice_timers
+! LR CMB 
 
       call init_communicate     ! initial setup for message passing
       call init_fileunits       ! unit numbers
@@ -110,6 +121,20 @@
 #endif 
       call init_thermo_vertical ! initialize vertical thermodynamics
       call init_itd             ! initialize ice thickness distribution
+
+! LR CMB
+        if (tr_fsd) call init_fsd_bounds      ! initialize floe size distribution bounds CMB
+
+        ! Calculate the floe size distribution created and lost as a result of
+        ! ocean surface wave fracture for all combinations of discrete properties
+        ! OR read this in from text files, and save for later use
+        call ice_timer_start(timer_initwaves)
+
+        if (tr_fsd.and.(.NOT.wave_spec)) call init_wave 
+
+        call ice_timer_stop(timer_initwaves)
+! LR CMB
+                                 
       call calendar(time)       ! determine the initial date
 
       call init_forcing_ocn(dt) ! initialize sss and sst from data
@@ -139,6 +164,16 @@
    !--------------------------------------------------------------------
 
       call init_forcing_atmo    ! initialize atmospheric forcing (standalone)
+
+! LR
+      if (tr_fsd) then
+          if (wave_spec) then
+              call get_wave_spec ! read in wave spectrum in ice
+          else
+              call get_forcing_wave ! wave forcing from data outside ice
+          end if
+      end if
+! LR
 
 #ifndef coupled
       call get_forcing_atmo     ! atmospheric forcing from data
@@ -188,6 +223,10 @@
       use ice_state ! almost everything
       use ice_zbgc, only: init_bgc
       use ice_zbgc_shared, only: skl_bgc
+! CMB
+      use ice_domain_size, only: nfsd   ! CMB
+      use ice_fsd, only: init_fsd, restart_fsd, read_restart_fsd  ! CMB
+! CMB
 
       integer(kind=int_kind) :: iblk
 
@@ -228,6 +267,19 @@
             enddo ! iblk
          endif
       endif
+! CMB
+      ! floe size distribution tracer
+      if (tr_fsd) then
+         if (trim(runtype) == 'continue') restart_fsd = .true.
+         if (restart_fsd) then
+            call read_restart_fsd
+         else
+            do iblk = 1, nblocks
+               call init_fsd(nx_block, ny_block, iblk, ncat, nfsd, trcrn(:,:,:,:,iblk))
+            enddo ! iblk
+         endif
+      endif
+! CMB
       ! level ice tracer
       if (tr_lvl) then
          if (trim(runtype) == 'continue') restart_lvl = .true.

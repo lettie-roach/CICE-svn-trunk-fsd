@@ -33,6 +33,9 @@
         nblyr     = NBGCLYR   , & ! number of bio/brine layers per category
         max_nbtrcr=   9       , & ! maximum number of biology tracers
 !        nltrcr    = max_nbtrcr*TRBRI, & ! maximum layer bgc tracers (for zbgc)
+! LR
+        nfsd    = 12      , & ! number of floe size categories, hardwired here
+! LR
 
         max_ntrcr =   1         & ! 1 = surface temperature              
                   + nilyr       & ! ice salinity
@@ -44,6 +47,7 @@
                   + TRLVL*2     & ! level/deformed ice
                   + TRPND*3     & ! ponds
                   + n_aero*4    & ! number of aerosols * 4 aero layers
+                  + nfsd        & ! number of floes in floe-size distribution  CMB
                   + TRBRI       & ! brine height
                   + TRBGCS    , & ! skeletal layer BGC
 !                  + TRBGCZ*nltrcr*nblyr ! for zbgc (off if TRBRI=0)

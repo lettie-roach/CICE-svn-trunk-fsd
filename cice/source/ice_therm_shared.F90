@@ -46,10 +46,11 @@
          calc_Tsfc       ! if true, calculate surface temperature
                          ! if false, Tsfc is computed elsewhere and
                          ! atmos-ice fluxes are provided to CICE
-
-      real (kind=dbl_kind), parameter, public :: &
-         hfrazilmin = 0.05_dbl_kind ! min thickness of new frazil ice (m)
-
+! LR
+      real (kind=dbl_kind), public :: & ! LR changed from parameter
+                                        ! now set in namelist
+         hfrazilmin! LR = 0.05_dbl_kind ! min thickness of new frazil ice (m)
+! LR
 !=======================================================================
 
       contains

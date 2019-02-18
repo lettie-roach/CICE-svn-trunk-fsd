@@ -50,7 +50,10 @@
          hi_min          ! minimum ice thickness allowed (m)
 
       real (kind=dbl_kind), public :: &
-         hin_max(0:ncat) ! category limits (m)
+         hin_max(0:ncat), & ! category limits (m)
+! LR
+         hin_max_init(0:ncat)    ! category limits (m) before changes
+! LR
 
       character (len=35) :: c_hi_range(ncat)
 
@@ -234,6 +237,10 @@
          write (nu_diag,*) ' '
       endif
 
+! LR 
+      ! save initial thickness categories to calculate dh
+      hin_max_init = hin_max
+! LR
       end subroutine init_itd
 
 !=======================================================================
