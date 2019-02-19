@@ -1,0 +1,50 @@
+#==============================================================================
+# Makefile macros for "jaguar," an ORNL Cray XT3 running Linux
+# Modified by Lettie Roach for Kupe
+# Copied all FLAGS options and CPPDEFS from Macros.Linux.NCAR.yellowstone
+#==============================================================================
+
+INCLDIR    := -I.
+SLIBS      := 
+ULIBS      := 
+CPP        := /usr/bin/cpp
+CPPFLAGS   := -P -traditional-cpp -DPOSIX
+CPPDEFS    := -DLINUX 
+
+CFLAGS     := -c -O2 -fp-model precise   -xHost
+FIXEDFLAGS := -132
+FREEFLAGS  := -FR
+FFLAGS     := -O2 -fp-model precise -convert big_endian -assume byterecl -ftz -traceback -check -check noarg_temp_created  -xHost -fpe0  
+FFLAGS_NOOPT:= -O0
+
+FC         := ftn
+FOD_SUFFIX := mod
+LD         := ftn
+LDFLAGS    := 
+
+    CPPDEFS :=  $(CPPDEFS) -DNXGLOB=$(NXGLOB) -DNYGLOB=$(NYGLOB) \
+                -DBLCKX=$(BLCKX) -DBLCKY=$(BLCKY) -DMXBLCKS=$(MXBLCKS) \
+                -DNICELYR=$(NICELYR) -DNSNWLYR=$(NSNWLYR) -DNICECAT=$(NICECAT) \
+                -DTRAGE=$(TRAGE) -DTRFY=$(TRFY) -DTRLVL=$(TRLVL) -DTRPND=$(TRPND) \
+                -DTRBRI=$(TRBRI) -DNTRAERO=$(NTRAERO) -DNBGCLYR=$(NBGCLYR) \
+                -DTRBGCS=$(TRBGCS) -DNUMIN=$(NUMIN) -DNUMAX=$(NUMAX) \
+		-DNFSDCAT=$(NFSDCAT)
+
+
+
+#   CPPDEFS :=  $(CPPDEFS) -DAOMIP
+
+ifeq ($(COMMDIR), mpi)
+#   SLIBS   :=  $(SLIBS) -lmpich
+endif
+
+ifeq ($(DITTO), yes)
+   CPPDEFS :=  $(CPPDEFS) -DREPRODUCIBLE
+endif
+
+ifeq ($(IO_TYPE), netcdf)
+   CPPDEFS := $(CPPDEFS) -Dncdf
+   INCLDIR := $(INCLDIR) -I/opt/cray/pe/netcdf/4.4.1.1.6/INTEL/16.0/include 
+   SLIBS   := $(SLIBS) -L/opt/cray/pe/netcdf/4.4.1.1.6/INTEL/16.0/lib -lnetcdff -lnetcdf 
+endif
+
