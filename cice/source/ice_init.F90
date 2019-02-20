@@ -71,7 +71,7 @@
           sss_data_type,   sst_data_type, ocn_data_dir, &
           oceanmixed_file, restore_sst,   trestore, &
 ! LR
-          wave_forc_dir, wave_forc_file, wave_spec_path
+          wave_forc_dir, wave_forc_file, wave_spec_dir, wave_spec_file
       use ice_wavebreaking, only: wave_fn_dir, calc_wave
       use ice_wavefracspec, only: wave_spec
 ! LR

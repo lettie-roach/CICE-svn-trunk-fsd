@@ -1520,7 +1520,7 @@
 
       use ice_blocks, only: block, get_block, nx_block, ny_block
       use ice_fileunits, only: nu_diag
-      use ice_constants, only: c0, c1, p25, puny, secday, depressT, &
+      use ice_constants, only: c0, c1, c2, p25, puny, secday, depressT, &
           awtvdr, awtidr, awtvdf, awtidf, Lfresh, rhos, cp_ice, spval
       use ice_domain, only: blocks_ice, nblocks
       use ice_grid, only: tmask, lmask_n, lmask_s
@@ -1686,7 +1686,7 @@
       !---------------------------------------------------------------
       !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block, &
       !$OMP             k,n,qn,ns,hs,worka,workb,Tinz4d,Sinz4d,Tsnz4d, &
-                        workd, worke) ! LR 
+      !$OMP             workd, worke) ! LR 
       do iblk = 1, nblocks
          this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo

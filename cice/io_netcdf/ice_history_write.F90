@@ -270,8 +270,7 @@
       var_nz(3) = coord_attributes('VGRDs', 'vertical snow levels', '1')
       var_nz(4) = coord_attributes('VGRDb', 'vertical ice-bio levels', '1')
 ! LR
-      var_nz(5) = coord_attributes('NFSD','category lower bound floe
-      diameter','m')
+      var_nz(5) = coord_attributes('NFSD','category lower bound floe diameter','m')
 ! LR
       !-----------------------------------------------------------------
       ! define information for optional time-invariant variables

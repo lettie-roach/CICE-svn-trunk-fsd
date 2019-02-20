@@ -66,7 +66,7 @@
       use ice_forcing, only: init_forcing_ocn, init_forcing_atmo, &
           get_forcing_atmo, get_forcing_ocn, &
 ! LR
-          get_forcing_wave
+          get_forcing_wave, get_wave_spec
 ! LR
       use ice_grid, only: init_grid1, init_grid2
       use ice_history, only: init_hist, accum_hist
