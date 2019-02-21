@@ -4,10 +4,10 @@
   , year_init      = 1997
   , istep0         = 0
   , dt             = 3600.0
-  , npt            = 744
+  , npt            = 8930 
   , ndtd           = 1
   , runtype        = 'initial'
-  , ice_ic         = './restart/iced_gx3_v5.nc'
+  , ice_ic         = 'none'
   , restart        = .true.
   , restart_ext    = .false.
   , use_restart_time = .true.
@@ -62,7 +62,9 @@
 /
 
 &tracer_nml
-    tr_iage      = .true.
+    tr_fsd       = .true.
+  , restart_fsd  = .false.
+  , tr_iage      = .true.
   , restart_age  = .false.
   , tr_FY        = .false.
   , restart_FY   = .false.
@@ -88,6 +90,7 @@
   , dSdt_slow_mode    = -5.0e-8
   , phi_c_slow_mode   =    0.05
   , phi_i_mushy       =    0.85
+  , new_ice_fs        = 3
 /
 
 &dynamics_nml
@@ -156,7 +159,7 @@
   , ycycle          = 1
   , atm_data_format = 'bin'
   , atm_data_type   = 'ncar'
-  , atm_data_dir    = '/usr/projects/climate/eclare/DATA/atm/gx3v2m/NCAR_bulk/'
+  , atm_data_dir    = '/home/roachla/cice_standalone_5.1.2_maui/dummy_forcing_data/data1997/'
   , calc_strair     = .true.
   , highfreq        = .false.
   , natmiter        = 5
@@ -176,6 +179,9 @@
   , restore_sst     = .false.
   , trestore        =  90
   , restore_ice     = .false.
+  , wave_forc_dir   = '/home/roachla/cice_standalone_5.1.2_maui/dummy_forcing_data/JRA55_Wave/'
+  , wave_forc_file  = 'gx3_ww3g_6h_jra55-wave-1997.nc'
+  , wave_fn_dir     =  '/home/roachla/cice_standalone_5.1.2_maui/dummy_forcing_data/wave_fns/'
 /
 
 &icefields_nml
@@ -197,31 +203,40 @@
   , f_VGRDb        = .false.
   , f_bounds       = .false.
   , f_aice         = 'm' 
-  , f_hi           = 'm'
-  , f_hs           = 'm' 
-  , f_Tsfc         = 'm' 
-  , f_sice         = 'm' 
-  , f_uvel         = 'm' 
-  , f_vvel         = 'm' 
-  , f_uatm         = 'm' 
-  , f_vatm         = 'm' 
-  , f_fswdn        = 'm' 
-  , f_flwdn        = 'm'
+  , f_wave_hs      = 'm'
+  , f_wave_hs_ice  = 'm'
+  , f_wave_tz      = 'm'
+  , f_areal_fsd    = 'm'
+  , f_dafsdani     = 'm'
+  , f_dafsdlatm    = 'm'
+  , f_dafsdlatg    = 'm'
+  , f_dafsdwave    = 'm'
+  , f_dafsdmrg     = 'm'
+  , f_hi           = 'x'
+  , f_hs           = 'x' 
+  , f_Tsfc         = 'x' 
+  , f_sice         = 'x' 
+  , f_uvel         = 'x' 
+  , f_vvel         = 'x' 
+  , f_uatm         = 'x' 
+  , f_vatm         = 'x' 
+  , f_fswdn        = 'x' 
+  , f_flwdn        = 'x'
   , f_snowfrac     = 'x'
   , f_snow         = 'x' 
-  , f_snow_ai      = 'm' 
+  , f_snow_ai      = 'x' 
   , f_rain         = 'x' 
-  , f_rain_ai      = 'm' 
-  , f_sst          = 'm' 
-  , f_sss          = 'm' 
-  , f_uocn         = 'm' 
-  , f_vocn         = 'm' 
-  , f_frzmlt       = 'm'
-  , f_fswfac       = 'm'
-  , f_fswint_ai    = 'm'
+  , f_rain_ai      = 'x' 
+  , f_sst          = 'x' 
+  , f_sss          = 'x' 
+  , f_uocn         = 'x' 
+  , f_vocn         = 'x' 
+  , f_frzmlt       = 'x'
+  , f_fswfac       = 'x'
+  , f_fswint_ai    = 'x'
   , f_fswabs       = 'x' 
-  , f_fswabs_ai    = 'm' 
-  , f_albsni       = 'm' 
+  , f_fswabs_ai    = 'x' 
+  , f_albsni       = 'x' 
   , f_alvdr        = 'x'
   , f_alidr        = 'x'
   , f_alvdf        = 'x'
@@ -235,38 +250,38 @@
   , f_albpnd       = 'x'
   , f_coszen       = 'x'
   , f_flat         = 'x' 
-  , f_flat_ai      = 'm' 
+  , f_flat_ai      = 'x' 
   , f_fsens        = 'x' 
-  , f_fsens_ai     = 'm' 
+  , f_fsens_ai     = 'x' 
   , f_fswup        = 'x' 
   , f_flwup        = 'x' 
-  , f_flwup_ai     = 'm' 
+  , f_flwup_ai     = 'x' 
   , f_evap         = 'x' 
-  , f_evap_ai      = 'm' 
-  , f_Tair         = 'm' 
+  , f_evap_ai      = 'x' 
+  , f_Tair         = 'x' 
   , f_Tref         = 'x' 
   , f_Qref         = 'x'
-  , f_congel       = 'm' 
-  , f_frazil       = 'm' 
-  , f_snoice       = 'm' 
+  , f_congel       = 'x' 
+  , f_frazil       = 'x' 
+  , f_snoice       = 'x' 
   , f_dsnow        = 'x' 
-  , f_melts        = 'm'
-  , f_meltt        = 'm'
-  , f_meltb        = 'm'
-  , f_meltl        = 'm'
+  , f_melts        = 'x'
+  , f_meltt        = 'x'
+  , f_meltb        = 'x'
+  , f_meltl        = 'x'
   , f_fresh        = 'x'
-  , f_fresh_ai     = 'm'
+  , f_fresh_ai     = 'x'
   , f_fsalt        = 'x'
-  , f_fsalt_ai     = 'm'
+  , f_fsalt_ai     = 'x'
   , f_fhocn        = 'x' 
-  , f_fhocn_ai     = 'm' 
+  , f_fhocn_ai     = 'x' 
   , f_fswthru      = 'x' 
-  , f_fswthru_ai   = 'm' 
+  , f_fswthru_ai   = 'x' 
   , f_fsurf_ai     = 'x'
   , f_fcondtop_ai  = 'x'
   , f_fmeltt_ai    = 'x' 
-  , f_strairx      = 'm' 
-  , f_strairy      = 'm' 
+  , f_strairx      = 'x' 
+  , f_strairy      = 'x' 
   , f_strtltx      = 'x' 
   , f_strtlty      = 'x' 
   , f_strcorx      = 'x' 
@@ -275,24 +290,24 @@
   , f_strocny      = 'x' 
   , f_strintx      = 'x' 
   , f_strinty      = 'x'
-  , f_strength     = 'm'
-  , f_divu         = 'm'
-  , f_shear        = 'm'
-  , f_sig1         = 'm' 
-  , f_sig2         = 'm' 
-  , f_dvidtt       = 'm' 
-  , f_dvidtd       = 'm' 
-  , f_daidtt       = 'm'
-  , f_daidtd       = 'm' 
-  , f_dagedtt      = 'm'
-  , f_dagedtd      = 'm' 
-  , f_mlt_onset    = 'm'
-  , f_frz_onset    = 'm'
+  , f_strength     = 'x'
+  , f_divu         = 'x'
+  , f_shear        = 'x'
+  , f_sig1         = 'x' 
+  , f_sig2         = 'x' 
+  , f_dvidtt       = 'x' 
+  , f_dvidtd       = 'x' 
+  , f_daidtt       = 'x'
+  , f_daidtd       = 'x' 
+  , f_dagedtt      = 'x'
+  , f_dagedtd      = 'x' 
+  , f_mlt_onset    = 'x'
+  , f_frz_onset    = 'x'
   , f_hisnap       = 'x'
   , f_aisnap       = 'x'
-  , f_trsig        = 'm'
-  , f_icepresent   = 'm'
-  , f_iage         = 'm'
+  , f_trsig        = 'x'
+  , f_icepresent   = 'x'
+  , f_iage         = 'x'
   , f_FY           = 'x'
   , f_aicen        = 'x'
   , f_vicen        = 'x'
@@ -310,10 +325,10 @@
 /
 
 &icefields_mechred_nml
-    f_alvl         = 'm'
-  , f_vlvl         = 'm'
-  , f_ardg         = 'm'
-  , f_vrdg         = 'm'
+    f_alvl         = 'x'
+  , f_vlvl         = 'x'
+  , f_ardg         = 'x'
+  , f_vrdg         = 'x'
   , f_dardg1dt     = 'x'
   , f_dardg2dt     = 'x'
   , f_dvirdgdt     = 'x'
@@ -335,14 +350,14 @@
     f_apondn       = 'x'
   , f_apeffn       = 'x'
   , f_hpondn       = 'x'
-  , f_apond        = 'm'
-  , f_hpond        = 'm'
-  , f_ipond        = 'm'
-  , f_apeff        = 'm'
-  , f_apond_ai     = 'm'
-  , f_hpond_ai     = 'm'
-  , f_ipond_ai     = 'm'
-  , f_apeff_ai     = 'm'
+  , f_apond        = 'x'
+  , f_hpond        = 'x'
+  , f_ipond        = 'x'
+  , f_apeff        = 'x'
+  , f_apond_ai     = 'x'
+  , f_hpond_ai     = 'x'
+  , f_ipond_ai     = 'x'
+  , f_apeff_ai     = 'x'
 /
 
 &icefields_bgc_nml
@@ -372,8 +387,8 @@
   , f_bgc_DMSP_ml  = 'x'
   , f_bTin         = 'x'
   , f_bphi         = 'x' 
-  , f_fbri         = 'm'    
-  , f_hbri         = 'm'
+  , f_fbri         = 'x'    
+  , f_hbri         = 'x'
   , f_grownet      = 'x'
   , f_PPnet        = 'x'
 /

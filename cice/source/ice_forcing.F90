@@ -324,16 +324,18 @@
       read6 = .false.
       if (istep==1 .or. oldrecnum_wavehs /= recnum) read6 = .true.
 
-      !fieldname='swh'
       fieldname='hs'
       call read_data_nc (read6, 0, fyear, ixm, ixx, ixp, &
                          maxrec, wave_hs_file,fieldname, wave_hs_data, &
                          field_loc_center, field_type_scalar)
       fieldname='t02'
-       call read_data_nc (read6, 0, fyear, ixm, ixx, ixp, &
+      call read_data_nc (read6, 0, fyear, ixm, ixx, ixp, &
                          maxrec, wave_t02_file,fieldname, wave_t02_data, &
                          field_loc_center, field_type_scalar)
- 
+
+      WHERE (wave_hs_data.gt.bignum) wave_hs_data = c0
+      WHERE (wave_t02_data.gt.bignum) wave_t02_data = c0
+
       ! Interpolate
       call interpolate_data (wave_hs_data, wave_hs)
       call interpolate_data (wave_t02_data, wave_tz)

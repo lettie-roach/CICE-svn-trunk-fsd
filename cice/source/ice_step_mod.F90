@@ -831,6 +831,7 @@
       use ice_domain_size, only: nfsd, nilyr
       use ice_grid, only: tarea
       use ice_state, only: nt_fsd, nt_Tsfc, vice, nt_qice
+      use ice_wavefracspec, only: wave_spec
 ! LR CMB
 
       real (kind=dbl_kind), intent(in) :: &
@@ -869,6 +870,7 @@
 
       nfreq = SIZE(wave_spectrum, DIM=3)
 
+      
 ! LR
 
       l_stop = .false.

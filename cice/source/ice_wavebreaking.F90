@@ -133,10 +133,10 @@
 
            ! write text files
            open(4,file= trim(wave_fn_dir)//&
-                                "hist_lookup_new_20180913.txt")
+                                "hist_lookup_new_20180912.txt")
  
            open(5,file= trim(wave_fn_dir)//&
-                                "tau_lookup_new_20180913.txt")
+                                "tau_lookup_new_20180912.txt")
 
            do nn=1,ncat
            do nd=1,nwcat                                     
@@ -165,9 +165,9 @@
 
 
                open(4,file = trim(wave_fn_dir)//&
-                                "hist_lookup_new_20180912.txt")
+                                "hist_lookup_roach2017.txt")
                open(5,file= trim(wave_fn_dir)//&
-                                "tau_lookup_new_20180912.txt")
+                                "tau_lookup_roach2017.txt")
 
                do nn=1,ncat
                do nd=1,nwcat                                     
@@ -185,7 +185,7 @@
                close(5)
            end if
         end if
-
+ 
       
           end subroutine init_wave
 
@@ -693,10 +693,10 @@
                                         omega(k) = amfstd_tmp(k)*SUM(fracture_histogram(nh,nt,nd,nn,1:k-1))/ (D/c2) &
                                                 /wave_tau(nh,nt,nd,nn) 
                                 end do
-
+                                
                                 if (SUM(omega).gt.c1+puny) stop &
                                  'omega cannot be greater than 1'
-                        
+                       
                                 loss = omega
 
                                 do k =1,nfsd

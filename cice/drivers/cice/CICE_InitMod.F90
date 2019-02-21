@@ -62,7 +62,8 @@
       use ice_dyn_shared, only: kdyn, init_evp
       use ice_fileunits, only: init_fileunits
       use ice_flux, only: init_coupler_flux, init_history_therm, &
-          init_history_dyn, init_flux_atm, init_flux_ocn
+          init_history_dyn, init_flux_atm, init_flux_ocn, &
+          wave_spectrum ! LR
       use ice_forcing, only: init_forcing_ocn, init_forcing_atmo, &
           get_forcing_atmo, get_forcing_ocn, &
 ! LR
@@ -78,7 +79,8 @@
       use ice_shortwave, only: init_shortwave
       use ice_state, only: tr_aero
       use ice_therm_vertical, only: init_thermo_vertical
-      use ice_timers, only: timer_total, init_ice_timers, ice_timer_start
+      use ice_timers, only: timer_total, init_ice_timers, ice_timer_start, &
+                            timer_initwaves, ice_timer_stop ! LR
       use ice_transport_driver, only: init_transport
       use ice_zbgc, only: init_zbgc
       use ice_zbgc_shared, only: skl_bgc
@@ -91,7 +93,7 @@
       use ice_wavebreaking!, only: init_wave ! LR
       use ice_wavefracspec, only: wave_spec
       use ice_communicate, only: my_task, master_task !LR
-      use ice_timers
+      use ice_domain_size, only: max_blocks
 ! LR CMB 
 
       call init_communicate     ! initial setup for message passing
@@ -171,6 +173,9 @@
               call get_wave_spec ! read in wave spectrum in ice
           else
               call get_forcing_wave ! wave forcing from data outside ice
+              ! need to allocate wave_spectrum as it doesn't exist yet
+              ! and needs to be passed to add_new_ice_lat
+              allocate(wave_spectrum(1,1,1,max_blocks))
           end if
       end if
 ! LR

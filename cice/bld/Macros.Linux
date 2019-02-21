@@ -14,7 +14,7 @@ CPPDEFS    := -DLINUX
 CFLAGS     := -c -O2 -fp-model precise   -xHost
 FIXEDFLAGS := -132
 FREEFLAGS  := -FR
-FFLAGS     := -O2 -fp-model precise -convert big_endian -assume byterecl -ftz -traceback -check -check noarg_temp_created  -xHost -fpe0  
+FFLAGS     := -O2 -fp-model precise -convert big_endian -assume byterecl -ftz -traceback -check -check noarg_temp_created  -xHost -fpe0 -C -g -pg -check bounds -check uninit
 FFLAGS_NOOPT:= -O0
 
 FC         := ftn
