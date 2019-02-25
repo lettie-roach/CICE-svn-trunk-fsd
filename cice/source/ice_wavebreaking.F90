@@ -59,8 +59,9 @@
          nfl
 
        character(char_len_long), public :: &         
-         wave_fn_dir    ! directory containing look-up tables
- 
+         wave_fn_dir, &    ! directory containing look-up tables
+         wave_fn_file      ! filename for look-up tables
+
        logical (kind=log_kind), public :: &
          calc_wave      ! if true, calculate look tables for omega and fsdformed
                         ! if false, read them in from text file
@@ -133,11 +134,10 @@
 
            ! write text files
            open(4,file= trim(wave_fn_dir)//&
-                                "hist_lookup_new_20180912.txt")
+                                'hist_'//trim(wave_fn_file))
  
            open(5,file= trim(wave_fn_dir)//&
-                                "tau_lookup_new_20180912.txt")
-
+                                'tau_'//trim(wave_fn_file))
            do nn=1,ncat
            do nd=1,nwcat                                     
            do nt=1,nwcat
@@ -163,12 +163,12 @@
                wave_tau = c0
            else
 
-
-               open(4,file = trim(wave_fn_dir)//&
-                                "hist_lookup_roach2017.txt")
+               open(4,file= trim(wave_fn_dir)//&
+                                'hist_'//trim(wave_fn_file))
+ 
                open(5,file= trim(wave_fn_dir)//&
-                                "tau_lookup_roach2017.txt")
-
+                                'tau_'//trim(wave_fn_file))
+ 
                do nn=1,ncat
                do nd=1,nwcat                                     
                do nt=1,nwcat

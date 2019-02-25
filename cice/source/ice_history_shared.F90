@@ -231,8 +231,6 @@
            f_hm              = 'm',& 
            f_areal_fsd       = 'm', f_areal_fstd      = 'm', &
            f_areal_mfstd_tilda  = 'm', &
-           f_dafpiani        = 'm', f_dafpilatm       = 'm', &  
-           f_dafpilatg       = 'm',                          &
            f_dafsdani        = 'm', f_dafsdlatm       = 'm', &  
            f_dafsdwave       = 'm', f_dafsdmrg        = 'm', &
            f_dafsdlatg       = 'm', f_damfstdani      = 'm', &
@@ -342,8 +340,6 @@
            f_hm,                                        &
            f_areal_fsd,         f_areal_fstd,           &
            f_areal_mfstd_tilda,                         &
-           f_dafpiani,          f_dafpilatm,            &
-           f_dafpilatg,                                 &
            f_dafsdani,          f_dafsdlatm,            &
            f_dafsdwave,         f_dafsdmrg,             &
            f_dafsdlatg,         f_damfstdlatg,          &
@@ -471,8 +467,6 @@
            n_hm,                                          &
            n_areal_fsd          , n_areal_fstd          , & 
            n_areal_mfstd_tilda  , &
-           n_dafpiani           , n_dafpilatm           , &
-           n_dafpilatg          ,                         &
            n_dafsdani           , n_dafsdlatm           , &
            n_dafsdwave          , n_dafsdmrg            , &
            n_dafsdlatg          , n_damfstdlatg         , &
@@ -706,7 +700,7 @@
 
             if (vcoord(11:14) == 'time') then
                num_avail_hist_fields_2D  = num_avail_hist_fields_2D + 1
-            elseif (vcoord(11:14) == 'NCAT' .and. vcoord(16:19) == 'time') then
+            elseif (vcoord(11:14) == 'NCAT' .and. vcoord(17:20) == 'time') then
                num_avail_hist_fields_3Dc = num_avail_hist_fields_3Dc + 1
             elseif (vcoord(11:15) == 'VGRDi' .and. vcoord(17:20) == 'time') then
                num_avail_hist_fields_3Dz = num_avail_hist_fields_3Dz + 1

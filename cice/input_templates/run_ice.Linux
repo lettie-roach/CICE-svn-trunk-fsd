@@ -2,8 +2,7 @@
 #SBATCH --job-name=cice
 #SBATCH --time=02:00:00
 #SBATCH --nodes=1
-#SBATCH --account=niwa00016
-#SBATCH --partition=NeSI
+#SBATCH --account=niwa00013
 #SBATCH --cpus-per-task=1
 #SBATCH --ntasks=4
 #SBATCH --output=ice_log_%j.txt 

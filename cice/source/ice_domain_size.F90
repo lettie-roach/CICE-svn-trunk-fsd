@@ -34,7 +34,7 @@
         max_nbtrcr=   9       , & ! maximum number of biology tracers
 !        nltrcr    = max_nbtrcr*TRBRI, & ! maximum layer bgc tracers (for zbgc)
 ! LR
-        nfsd    = 12      , & ! number of floe size categories, hardwired here
+        nfsd    = NFSDCAT      , & ! number of floe size categories
 ! LR
 
         max_ntrcr =   1         & ! 1 = surface temperature              

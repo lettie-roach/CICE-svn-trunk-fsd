@@ -30,7 +30,6 @@
          restart_fsd      ! if .true., read fsd tracer restart file
 
       logical (kind=log_kind), public :: & 
-         write_diag_diff, &  ! if .true., calculate differences in mFSTD and a_n and save to history file
          write_diag_wave     ! if .true., write the lat/lons from find_wave to history file
 
 
@@ -56,8 +55,7 @@
 
 ! LR
       real (kind=dbl_kind), dimension (nx_block,ny_block,nfsd,max_blocks), public, save :: &
-        d_afsd_latg, d_afsd_latm, d_afsd_addnew, d_afsd_merge, d_afsd_wave, &
-        d_afsdpi_latg, d_afsdpi_latm, d_afsdpi_addnew ! for perim
+        d_afsd_latg, d_afsd_latm, d_afsd_addnew, d_afsd_merge, d_afsd_wave
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nfsd,ncat,max_blocks), public, save :: &
         d_amfstd_latg, d_amfstd_latm, d_amfstd_addnew, d_amfstd_merge, d_amfstd_wave
@@ -105,16 +103,48 @@
        real (kind = dbl_kind) :: test
 
        real (kind = dbl_kind), dimension (nfsd+1) :: &
-         lims, area_lims, area_lims_scaled ! local variables
+         area_lims, area_lims_scaled ! local variables
                                               
+       real (kind = dbl_kind), dimension(:), allocatable :: &
+           lims
 
 
-      if (nfsd.eq.12) then
+        if (nfsd.eq.24) then
 
-        lims =   (/  6.65000000e-02,   5.31030847e+00,   1.42865861e+01,   2.90576686e+01, &
-                     5.24122136e+01,   8.78691405e+01,   1.39518470e+02,   2.11635752e+02, &
-                     3.08037274e+02,   4.31203059e+02,   5.81277225e+02,   7.55141047e+02, &
-                     9.45812834e+02 /)
+            allocate(lims(24+1))
+
+            lims =   (/  6.65000000e-02,   5.31030847e+00,   1.42865861e+01,   2.90576686e+01, &
+                         5.24122136e+01,   8.78691405e+01,   1.39518470e+02,   2.11635752e+02, &
+                         3.08037274e+02,   4.31203059e+02,   5.81277225e+02,   7.55141047e+02, &
+                         9.45812834e+02,   1.34354446e+03,   1.82265364e+03,   2.47261361e+03, &
+                         3.35434988e+03,   4.55051413e+03,   6.17323164e+03,   8.37461170e+03, &
+                         1.13610059e+04,   1.54123510e+04,   2.09084095e+04,   2.83643675e+04, &
+                         3.84791270e+04 /)
+        
+        else  if (nfsd.eq.16) then
+
+            allocate(lims(16+1))
+
+            lims =   (/  6.65000000e-02,   5.31030847e+00,   1.42865861e+01,   2.90576686e+01, &
+                         5.24122136e+01,   8.78691405e+01,   1.39518470e+02,   2.11635752e+02, &
+                         3.08037274e+02,   4.31203059e+02,   5.81277225e+02,   7.55141047e+02, &
+                         9.45812834e+02,   1.34354446e+03,   1.82265364e+03,   2.47261361e+03, &
+                         3.35434988e+03 /)
+        
+        else if (nfsd.eq.12) then
+
+            allocate(lims(12+1))
+
+            lims =   (/  6.65000000e-02,   5.31030847e+00,   1.42865861e+01,   2.90576686e+01, &
+                         5.24122136e+01,   8.78691405e+01,   1.39518470e+02,   2.11635752e+02, &
+                         3.08037274e+02,   4.31203059e+02,   5.81277225e+02,   7.55141047e+02, &
+                         9.45812834e+02/)
+ 
+        else
+
+            stop 'floe size categories not defined for this nfsd'
+
+        end if
 
         floe_rad_l = lims(:nfsd)
         floe_rad_h = lims(2:)
@@ -124,34 +154,20 @@
         floe_area_c = 4.*floeshape*floe_rad_c**2.
         floe_area_h = 4.*floeshape*floe_rad_h**2.
 
-
-       else
-
-        do k=1,nfsd
-                floe_area_l(k) = c2**k
-                floe_area_h(k) = c2**(k+1)
-        end do
-     
-        floe_area_c=(floe_area_l+floe_area_h)/2.
-
-        floe_rad_l=(floe_area_l/(4*floeshape))**.5
-        floe_rad_h=(floe_area_h/(4*floeshape))**.5
-        floe_rad_c=(floe_area_c/(4*floeshape))**.5
-
-       end if
-
         floe_binwidth=(floe_rad_h-floe_rad_l)
+
+        
         if (my_task == master_task) then
-        write(*,*)&
-          'floe size bin info: low, high, center, width, area_c'
-        write(*,*) floe_rad_l
-        write(*,*) floe_rad_h
-        write(*,*) floe_rad_c
-        write(*,*) floe_binwidth
-        write(*,*) floe_area_l
-        write(*,*) floe_area_h   
-        write(*,*) floe_area_c
-       end if
+            write(*,*)&
+            'floe size bin info: low, high, center, width, area_c'
+            write(*,*) floe_rad_l
+            write(*,*) floe_rad_h
+            write(*,*) floe_rad_c
+            write(*,*) floe_binwidth
+            write(*,*) floe_area_l
+            write(*,*) floe_area_h   
+            write(*,*) floe_area_c
+        end if
 
 
         ! scaled area for merging
@@ -645,7 +661,7 @@
 
         integer (kind=int_kind) :: &
              n, &          ! ice thickness category index
-             i,j
+             i,j, k
 
 
         do n=1,ncat
@@ -654,20 +670,17 @@
                 do i = 1,nx_block
 
                 if (aicen(i,j,n).lt.c0) stop 'negative aice'
+                
                 if (ANY(trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n).lt.c0-1000*puny)) then
                         print *, 'mFSTD ',trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n)
                         print *, 'aicen ',aicen(i,j,n)
-			stop 'negative mFSTD'
+			            stop 'negative mFSTD'
                 end if
-                if (ANY(trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n).lt.c0)) then
-                        print *, 'slightly negative mFSTD, set to zero'
-                        print *, 'mFSTD ',trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n)
-                        print *, 'aicen ',aicen(i,j,n)
-                        WHERE(trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n).lt.c0) &
-                                trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n) = c0
-                end if
-         
 
+                ! tiny mFSTD set to zero
+                WHERE(trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n).lt.puny) &
+                        trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n) = c0        
+ 
                 ! mFSTD is zero when there is no ice
                 if (aicen(i,j,n).le.puny) then 
                         trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n) = c0

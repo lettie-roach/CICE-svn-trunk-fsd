@@ -822,12 +822,10 @@
                                 floe_merge_thermo, &
                                 add_new_ice_lat
        use ice_fsd, only:renorm_mfstd, &
-                         write_diag_diff, &
                          d_afsd_latg, d_amfstd_latg, d_an_latg, &
                          d_afsd_addnew, d_amfstd_addnew, d_an_addnew, &
                          d_afsd_latm, d_amfstd_latm, d_an_latm, &
-                         d_afsd_merge, d_amfstd_merge, nfreq, &
-                         d_afsdpi_latm, d_afsdpi_latg, d_afsdpi_addnew
+                         d_afsd_merge, d_amfstd_merge, nfreq
       use ice_domain_size, only: nfsd, nilyr
       use ice_grid, only: tarea
       use ice_state, only: nt_fsd, nt_Tsfc, vice, nt_qice
@@ -1021,8 +1019,6 @@
                            d_an_addnew(:,:,:,iblk),         &
                            d_afsd_latg(:,:,:,iblk),         &
                            d_afsd_addnew(:,:,:,iblk),       &
-                           d_afsdpi_latg(:,:,:,iblk),       &
-                           d_afsdpi_addnew(:,:,:,iblk),     &
                            d_amfstd_latg(:,:,:,:,iblk),     &
                            d_amfstd_addnew(:,:,:,:,iblk),   &
                            G_radial(:,:,iblk),              &
@@ -1032,10 +1028,8 @@
          
          else
                  ! no lateral growth
-                 if (write_diag_diff) then
-                         d_an_latg(:,:,:,iblk) = c0 
-                         aicen_save = aicen(:,:,:,iblk)
-                 end if
+                 d_an_latg(:,:,:,iblk) = c0 
+                 aicen_save = aicen(:,:,:,iblk)
 
                  call add_new_ice (nx_block,      ny_block, &
                            ntrcr,                 icells,   &
@@ -1062,7 +1056,7 @@
                            l_stop,                          &
                            istop                 , jstop)
 
-                 if (write_diag_diff) d_an_addnew(:,:,:,iblk) =  &
+                 d_an_addnew(:,:,:,iblk) =  &
                         aicen(:,:,:,iblk) - aicen_save
          end if 
          
@@ -1087,12 +1081,11 @@
 ! LR
         call ice_timer_start(timer_latmelt, iblk)
 
-        if (write_diag_diff) aicen_save = aicen(:,:,:,iblk)
+        aicen_save = aicen(:,:,:,iblk)
 
         if (tr_fsd) then
 
-                         if (write_diag_diff) amfstd_save = & 
-                                trcrn(:,:,nt_fsd:nt_fsd+nfsd-1,:,iblk)
+                         amfstd_save = trcrn(:,:,nt_fsd:nt_fsd+nfsd-1,:,iblk)
 
                          call lateral_melt_fsdtherm ( &
                             nx_block, ny_block,    &
@@ -1116,23 +1109,17 @@
                             salinz(:,:,:,iblk)    , &
                             G_radial(:,:,iblk)  )
                  
-                         if (write_diag_diff) then
                               d_amfstd_latm(:,:,:,:,iblk) = &
                                  trcrn(:,:,nt_fsd:nt_fsd+nfsd-1,:,iblk) - amfstd_save
                               do k=1,nfsd
                                 d_afsd_latm(:,:,k,iblk) = c0
-                                d_afsdpi_latm(:,:,k,iblk) = c0
                                 do n=1,ncat
                                         d_afsd_latm(:,:,k,iblk) = d_afsd_latm(:,:,k,iblk)  + &
                                         (aicen(:,:,n,iblk)*trcrn(:,:,nt_fsd+k-1,n,iblk) - &
                                         aicen_save(:,:,n) * amfstd_save(:,:,k,n) )
 
-                                        d_afsdpi_latm(:,:,k,iblk) = d_afsdpi_latm(:,:,k,iblk)  + & 
-                                            (aicen(:,:,n,iblk)*trcrn(:,:,nt_fsd+k-1,n,iblk)/SUM(aicen(:,:,:,iblk),DIM=3) - &
-                                            aicen_save(:,:,n) * amfstd_save(:,:,k,n) / SUM(aicen_save,DIM=3) ) 
                                 end do
                               end do
-                         end if
                                           
         else
 
@@ -1152,7 +1139,7 @@
                             trcrn     (:,:,:,:,iblk))
         endif
         
-        if (write_diag_diff) d_an_latm(:,:,:,iblk) = aicen(:,:,:,iblk) - aicen_save
+        d_an_latm(:,:,:,iblk) = aicen(:,:,:,iblk) - aicen_save
 
         call ice_timer_stop(timer_latmelt, iblk)
         call ice_timer_start(timer_merge, iblk)

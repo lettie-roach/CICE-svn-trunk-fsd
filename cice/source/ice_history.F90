@@ -81,7 +81,7 @@
 ! LR liuxy
       use ice_state, only: tr_fsd ! LR
       use ice_domain_size, only: nfsd ! liuxy
-      use ice_fsd, only: write_diag_diff, write_diag_wave 
+      use ice_fsd, only: write_diag_wave 
       use ice_wavefracspec, only: wave_spec
  
       integer (kind=int_kind) :: k !liuxy
@@ -167,9 +167,6 @@
         f_dafsdani = 'x'
         f_dafsdlatm = 'x'
         f_dafsdlatg = 'x'
-        f_dafpiani = 'x'
-        f_dafpilatm = 'x'
-        f_dafpilatg = 'x'
         f_danlatg   = 'x'
         f_damfstdmrg = 'x'
         f_damfstdwave ='x'
@@ -224,24 +221,6 @@
         f_ice_search_j = 'x'
       end if
 
-      if (.not. write_diag_diff) then
-        f_damfstdmrg = 'x'
-        f_damfstdwave ='x'
-        f_damfstdani = 'x'
-        f_damfstdlatm = 'x'
-        f_damfstdlatg = 'x'
-        f_dafpiani = 'x'
-        f_dafpilatm = 'x'
-        f_dafpilatg = 'x'
-        f_dafsdmrg = 'x'
-        f_dafsdwave ='x'
-        f_dafsdani = 'x'
-        f_dafsdlatm = 'x'
-        f_dafsdlatg = 'x'
-        f_danlatg = 'x'
-        f_danlatm = 'x'
-        f_danani = 'x'
-      end if
 ! LR 
       if (kdyn /= 2) then
            f_a11       = 'x'
@@ -330,9 +309,6 @@
       call broadcast_scalar (f_dafsdmrg, master_task)
       call broadcast_scalar (f_dafsdlatg, master_task)
       call broadcast_scalar (f_damfstdani, master_task)
-      call broadcast_scalar (f_dafpiani, master_task)
-      call broadcast_scalar (f_dafpilatm, master_task)
-      call broadcast_scalar (f_dafpilatg, master_task)
       call broadcast_scalar (f_damfstdlatm, master_task)
       call broadcast_scalar (f_damfstdwave, master_task)
       call broadcast_scalar (f_damfstdmrg, master_task)
@@ -1278,19 +1254,7 @@
               "Avg over freq period",        &
                c1, c0, ns1, f_dafsdlatg)
  
-           call define_hist_field(n_dafpiani,"dafpiani","1",tstr3Df, tcstr, & 
-              "Change in fsd per unit ice - ani",    &
-              "Avg over freq period",        &
-               c1, c0, ns1, f_dafpiani)
-           call define_hist_field(n_dafpilatm,"dafpilatm","1",tstr3Df, tcstr, & 
-              "Change in fsd per unit ice - latm",    &
-              "Avg over freq period",        &
-               c1, c0, ns1, f_dafpilatm)
-           call define_hist_field(n_dafpilatg,"dafpilatg","1",tstr3Df, tcstr, & 
-              "Change in fsd per unit ice - lat g",    &
-              "Avg over freq period",        &
-               c1, c0, ns1, f_dafpilatg)
- 
+
       endif ! if (histfreq(ns1) /= 'x') then
       enddo ! ns1 
 ! LR
@@ -2089,15 +2053,6 @@
         if (f_dafsdlatg     (1:1) /= 'x') call & 
                                          accum_hist_field(n_dafsdlatg-n3Dbcum, &
                                          iblk, nfsd_hist, d_afsd_latg(:,:,:,iblk), a3Df)
-        if (f_dafpiani      (1:1) /= 'x') call &
-                                        accum_hist_field (n_dafpiani-n3Dbcum, &
-                                        iblk, nfsd_hist, d_afsdpi_addnew(:,:,:,iblk), a3Df)        
-        if (f_dafpilatm     (1:1) /= 'x') call &
-                                         accum_hist_field(n_dafpilatm-n3Dbcum, &
-                                         iblk, nfsd_hist, d_afsdpi_latm(:,:,:,iblk), a3Df)
-        if (f_dafpilatg     (1:1) /= 'x') call & 
-                                         accum_hist_field(n_dafpilatg-n3Dbcum, &
-                                         iblk, nfsd_hist, d_afsdpi_latg(:,:,:,iblk), a3Df)
 ! LR
 ! example for 3D field (x,y,z)
 !         if (f_field3dz   (1:1) /= 'x') &

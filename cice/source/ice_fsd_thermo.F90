@@ -12,7 +12,6 @@
       use ice_constants
       use ice_domain_size, only: ncat, nfsd
       use ice_state, only: nt_fsd
-      use ice_fsd, only: write_diag_diff
 
       implicit none
 
@@ -584,7 +583,6 @@
                                       istop,     jstop      , &
                                       d_an_latg,        d_an_addnew,    &
                                       d_afsd_latg,      d_afsd_addnew,  &
-                                      d_afsdpi_latg,    d_afsdpi_addnew,  &
                                       d_amfstd_latg,    d_amfstd_addnew,&
                                       G_radial,         tarea, &
                                       wave_spectrum, wave_hs_in_ice )
@@ -592,7 +590,7 @@
               use ice_domain_size, only: nilyr, n_aero 
         ! LR
               use ice_fsd, only: floe_rad_c, floe_binwidth, &
-                                 floe_area_l, nfreq, wave_dep_growth
+                                 floe_area_l, floe_area_h, nfreq, wave_dep_growth
         ! LR     
               use ice_itd, only: hin_max, column_sum, &
                                  column_conservation_check 
@@ -676,7 +674,7 @@
                 d_amfstd_latg, d_amfstd_addnew
 
               real (kind=dbl_kind), dimension(nx_block,ny_block,nfsd), intent(out) :: &
-                d_afsd_latg, d_afsd_addnew, d_afsdpi_latg, d_afsdpi_addnew
+                d_afsd_latg, d_afsd_addnew
 
               real (kind=dbl_kind), dimension(nx_block,ny_block, nfreq), intent(in)  :: &
                 wave_spectrum
@@ -807,14 +805,10 @@
                vi0new_lat = c0
 
                ! diagnostics returned like this if no growth occurs
-               if (write_diag_diff) then
-                       d_amfstd_latg = c0
-                       d_amfstd_addnew = c0        
-                       d_afsd_latg = c0
-                       d_afsd_addnew = c0       
-                       d_afsdpi_latg = c0
-                       d_afsdpi_addnew = c0       
-               end if 
+               d_amfstd_latg = c0
+               d_amfstd_addnew = c0        
+               d_afsd_latg = c0
+               d_afsd_addnew = c0       
 ! LR
               !-----------------------------------------------------------------
               ! initialize
@@ -1297,7 +1291,7 @@
 
                                         trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n) = areal_mfstd_latg(i,j,:,n)
  
-                                        if (write_diag_diff) d_amfstd_latg(i,j,:,n) = & 
+                                        d_amfstd_latg(i,j,:,n) = & 
                                          areal_mfstd_latg(i,j,:,n)-  areal_mfstd_init(i,j,:,n)
 
                                 else
@@ -1312,7 +1306,7 @@
                                         if (d_an_addnew(i,j,n).gt.aicen(i,j,n)) stop &
                                            'area update neg somewhere'      
 
-                                       areal_mfstd_ni(:) = c0
+                                        areal_mfstd_ni(:) = c0
                                         if (SUM(areal_mfstd_latg(i,j,:,n)).gt.puny) then ! FSD exists
 
                                             if (new_ice_fs.eq.0) then
@@ -1336,21 +1330,8 @@
                                                 end do
 
                                             else if (new_ice_fs.ge.2) then
-                                                if (new_ice_fs.eq.2) then
-                                                    ! check open water area 
-                                                    new_size = nfsd      
-                                                    do k = 1,nfsd
-                                                      if (aicen(i,j,n)*tarea(i,j).lt.floe_area_l(k)) then
-                                                          new_size = k - 1
-                                                          EXIT
-                                                      end if
-                                                    end do
-                                                    new_size = MAX(new_size,1)
-                                             
-                                                else if (new_ice_fs.eq.3) then
-                                                    ! wave depedent size 
-                                                    call wave_dep_growth(wave_spectrum(i,j,:), wave_hs_in_ice(i,j), new_size) 
-                                                end if
+                                                if (new_ice_fs.eq.2) new_size = nfsd
+                                                if (new_ice_fs.eq.3) call wave_dep_growth(wave_spectrum(i,j,:), wave_hs_in_ice(i,j), new_size)
 
                                                 ! grow in new_size
                                                 areal_mfstd_ni(new_size) =  (area2(i,j,n) * areal_mfstd_latg(i,j,new_size,n) + &
@@ -1367,26 +1348,17 @@
                                                 end do
 
                                             end if ! new_fs_option
+
                                         else ! entirely new ice
                                              if (new_ice_fs.eq.0) then
                                                  areal_mfstd_ni(1) = c1
                                              else if (new_ice_fs.eq.1) then
                                                  areal_mfstd_ni(nfsd) = c1
-                                             else if (new_ice_fs.eq.2) then
-                                                 ! check open water area
-                                                 new_size = nfsd
-                                                 do k = 1,nfsd
-                                                      if (aicen(i,j,n)*tarea(i,j).lt.floe_area_l(k)) then
-                                                          new_size = k
-                                                          EXIT
-                                                      end if
-                                                 end do
-                                                 new_size = MAX(new_size,1)
-                                                 areal_mfstd_ni(new_size) = c1
-                                             else if  (new_ice_fs.eq.3) then
-                                                 ! wave depedent size
-                                                 call wave_dep_growth(wave_spectrum(i,j,:), wave_hs_in_ice(i,j), new_size)
-                                                 areal_mfstd_ni(new_size) = c1
+                                             else if (new_ice_fs.ge.2) then
+                                                if (new_ice_fs.eq.2) new_size = nfsd
+                                                if (new_ice_fs.eq.3) call wave_dep_growth(wave_spectrum(i,j,:), wave_hs_in_ice(i,j), new_size)
+
+                                                areal_mfstd_ni(new_size) = c1
                                              end if      
                                         end if ! entirely new ice 
 
@@ -1403,7 +1375,7 @@
                                         trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n) = areal_mfstd_ni
                                         if (SUM(trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n)).lt.puny) stop 'should not be punyy'  
 
-                                        if (write_diag_diff) d_amfstd_addnew(i,j,:,n) = &
+                                        d_amfstd_addnew(i,j,:,n) = &
                                           trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n) -  areal_mfstd_latg(i,j,:,n)
                                        
                                         if (ANY(trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n).gt.c1+puny)) stop  &
@@ -1501,14 +1473,10 @@
             end do
 
             ! diagnostics
-            if (write_diag_diff) then
                     do k=1,nfsd
                     d_afsd_latg(:,:,k) = c0
                     d_afsd_addnew(:,:,k) = c0
-                    d_afsdpi_latg(:,:,k) = c0
-                    d_afsdpi_addnew(:,:,k) = c0
-
-                    do n=1,ncat
+                                 do n=1,ncat
                         d_afsd_latg(:,:,k) = d_afsd_latg(:,:,k)  + &
                                 (aicen_init(:,:,n)+d_an_latg(:,:,n))*areal_mfstd_latg(:,:,k,n) - &
                                 aicen_init(:,:,n)*areal_mfstd_init(:,:,k,n)
@@ -1517,16 +1485,8 @@
                                 aicen(:,:,n)*trcrn(:,:,nt_fsd+k-1,n) - &
                                 (aicen_init(:,:,n)+d_an_latg(:,:,n))*areal_mfstd_latg(:,:,k,n)
  
-                        d_afsdpi_latg(:,:,k) = d_afsdpi_latg(:,:,k)  + &
-                                (aicen_init(:,:,n)+d_an_latg(:,:,n))*areal_mfstd_latg(:,:,k,n)/SUM((aicen_init(:,:,:)+d_an_latg(:,:,:)),DIM=3) - &
-                                aicen_init(:,:,n)*areal_mfstd_init(:,:,k,n)/SUM(aicen_init(:,:,:),DIM=3)
-
-                        d_afsdpi_addnew(:,:,k) = d_afsdpi_addnew(:,:,k)  + &
-                                aicen(:,:,n)*trcrn(:,:,nt_fsd+k-1,n)/SUM(aicen(:,:,:),DIM=3) - &
-                                (aicen_init(:,:,n)+d_an_latg(:,:,n))*areal_mfstd_latg(:,:,k,n)/SUM(aicen_init(:,:,:),DIM=3)
                     end do
                     end do
-            end if
              !----------------------
 
              if (l_conservation_check) then
@@ -1757,23 +1717,20 @@
                                 if (areal_mfstd(i,j,1,n).gt.amfstd_init(1)+puny) & 
                                     stop 'gain in smallest cat'
 
-                                if (write_diag_diff) &
-                                        d_amfstd_merge(i,j,:,n) = areal_mfstd(i,j,:,n) - amfstd_init
+                                d_amfstd_merge(i,j,:,n) = areal_mfstd(i,j,:,n) - amfstd_init
 
                         end if
                end do !ij
 
         end do! n
 
-        if (write_diag_diff) then
-            do k=1,nfsd
+        do k=1,nfsd
                 d_afsd_merge(:,:,k) = c0
                 do n=1,ncat
                         d_afsd_merge(:,:,k) = d_afsd_merge(:,:,k)  + &
                         aicen(:,:,n)* d_amfstd_merge(:,:,k,n)
                 end do
-            end do
-        end if
+        end do
 
            end subroutine floe_merge_thermo
 

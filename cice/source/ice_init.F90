@@ -72,7 +72,7 @@
           oceanmixed_file, restore_sst,   trestore, &
 ! LR
           wave_forc_dir, wave_forc_file, wave_spec_dir, wave_spec_file
-      use ice_wavebreaking, only: wave_fn_dir, calc_wave
+      use ice_wavebreaking, only: wave_fn_dir, wave_fn_file, calc_wave
       use ice_wavefracspec, only: wave_spec
 ! LR
       use ice_grid, only: grid_file, gridcpl_file, kmt_file, grid_type, grid_format
@@ -104,7 +104,7 @@
       use shr_file_mod, only: shr_file_setIO
 #endif
 ! CMB LR
-      use ice_fsd, only: restart_fsd, write_diag_diff, write_diag_wave, &
+      use ice_fsd, only: restart_fsd, write_diag_wave, &
                          c_mrg, rdc_frzmlt
       use ice_fsd_thermo, only: new_ice_fs
       use ice_domain_size, only: nfsd
@@ -140,7 +140,7 @@
         print_global,   print_points,   latpnt,          lonpnt,        &
         dbug,           histfreq,       histfreq_n,      hist_avg,      &
         history_dir,    history_file,                                   &
-        write_ic,       incond_dir,     incond_file,     write_diag_diff,&
+        write_ic,       incond_dir,     incond_file,                    &
         write_diag_wave               ! LR 
 
       namelist /grid_nml/ &
@@ -183,7 +183,8 @@
         restore_ice,    formdrag,        highfreq,      natmiter,       &
         tfrz_option, &
 ! LR
-        wave_forc_dir,  wave_forc_file,  wave_fn_dir,  calc_wave,       &
+        wave_forc_dir,  wave_forc_file,  wave_fn_dir,                   &
+        wave_fn_file,   calc_wave,                                      &
         wave_spec,      wave_spec_dir,   wave_spec_file                 
 ! LR
 
@@ -269,8 +270,6 @@
       new_ice_fs = 0        ! option for floe size assigned to new ice growth
       rdc_frzmlt=.false.       ! partitioning of frzmlt (limit for melt)
       hfrazilmin=0.05_dbl_kind ! min thickness of new frazil ice (m)
-      write_diag_diff=.false. ! if .true., calculate differences in mFSTD, FSD and
-                              ! a_n and save to history file
       write_diag_wave=.false. ! if .true., save lats/lons from find_wave to 
                               ! history file 
 ! LR
@@ -332,6 +331,7 @@
       wave_spec_dir = ' '
       wave_spec_file = ' '
       wave_fn_dir   = ' '
+      wave_fn_file = ' '
       calc_wave     = .false.     ! create lookup table for wave fracture 
       wave_spec     = .false.     ! wave spectrum in ice is available for each gridcell
 ! LR
@@ -748,7 +748,6 @@
       call broadcast_scalar(new_ice_fs,         master_task)
       call broadcast_scalar(rdc_frzmlt,         master_task)
       call broadcast_scalar(hfrazilmin,         master_task)
-      call broadcast_scalar(write_diag_diff,    master_task)
       call broadcast_scalar(write_diag_wave,    master_task)
 ! LR
       call broadcast_scalar(conduct,            master_task)
@@ -804,6 +803,7 @@
       call broadcast_scalar(wave_spec_dir,      master_task)
       call broadcast_scalar(wave_spec_file,     master_task)
       call broadcast_scalar(wave_fn_dir,        master_task)
+      call broadcast_scalar(wave_fn_file,        master_task)
       call broadcast_scalar(calc_wave,          master_task)
       call broadcast_scalar(wave_spec,          master_task)
 ! LR
@@ -980,9 +980,10 @@
 ! LR        
          write(nu_diag,1005) ' c_mrg                       = ', c_mrg
          write(nu_diag,1020) ' new_ice_fs                  = ', new_ice_fs
+
+
          write(nu_diag,1010) ' rdc_frzmlt                  = ', rdc_frzmlt
          write(nu_diag,1005) ' hfrazilmin                  = ', hfrazilmin
-         write(nu_diag,1020) ' write_diag_diff             = ', write_diag_diff
          write(nu_diag,1020) ' write_diag_wave             = ', write_diag_wave
 ! LR         
          write(nu_diag,1030) ' atmbndy                   = ', &
