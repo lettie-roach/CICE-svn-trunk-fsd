@@ -801,8 +801,7 @@
             G_radial = - wlat(i,j)
 
             ! LR - Compute rside but only to compute the lateral heat flux, fside
-            ! The ITD and mFSTD are only actually evolved in ice_fsd_thermo,
-            ! lateral_melt_fsdtherm subroutine
+            ! The ITD and mFSTD are only actually evolved in lateral_melt subroutine
             ! We need to compute fside and not just wlat, because fside may
             ! be reduced so that fside + bottom < frzmlt
             rside_itd(i,j,:) = 0

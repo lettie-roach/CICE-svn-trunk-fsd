@@ -16,140 +16,14 @@
       implicit none
 
       private
-      public :: partition_area, & 
-                floe_merge_thermo, add_new_ice_lat
+      public :: add_new_ice_lat
 
-      integer (kind=int_kind), public :: &
-        new_ice_fs     ! how does new ice grow?
-                
+               
 !=======================================================================
 
       contains
 
 !=======================================================================
-
-!=======================================================================
-! 
-!  Given the joint ice thickness and floe size distribution, calculate
-!  the lead region and the total lateral surface area following Horvat
-!  and Tziperman (2015)
-!
-! author: Lettie Roach, NIWA/VUW
-
-      subroutine partition_area (nx_block, ny_block, &
-                                        ilo, ihi, jlo, jhi, &
-                                        ntrcr,              &
-                                        aice,               &
-                                        aicen,    vicen,    &
-                                        trcrn,    lead_area,&
-                                        latsurf_area )
-
-      use ice_fsd, only: floe_rad_l, floe_rad_h, floe_rad_c, &
-                          floe_binwidth, floe_area_c, floeshape
-
-      integer (kind=int_kind), intent(in) :: &
-         nx_block, ny_block, & ! block dimensions
-         ilo,ihi,jlo,jhi,    & ! beginning and end of physical domain
-         ntrcr                 ! number of tracers
-       
-      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) :: &
-         aice        ! ice concentration
-        
-      real (kind=dbl_kind), dimension(nx_block,ny_block,ncat), &
-         intent(in) :: &
-         aicen, &      ! fractional area of ice 
-         vicen         ! volume per unit area of ice
-
-      real (kind=dbl_kind), dimension(nx_block,ny_block,ntrcr,ncat), & 
-         intent(in) :: &
-         trcrn       ! tracer array
-
-      real (kind=dbl_kind), dimension(nx_block,ny_block), &
-         intent(out) :: &
-          lead_area, &  ! the fractional area of the lead region
-          latsurf_area  ! the area covered by lateral surface of floes
-      
-      ! local variables
-      
-      integer (kind=int_kind) :: &
-         i, j           , & ! horizontal indices
-         n              , & ! thickness category index
-         k                  ! floe size index
-
-      real (kind=dbl_kind) :: &
-        width_leadreg, &   ! width of lead region
-        thickness          ! actual thickness of ice in thickness cat
-
-      ! -----------------------------------------------------------------
-      ! Initialize
-      !-----------------------------------------------------------------
-       lead_area=c0
-       latsurf_area=c0
-
-       ! Set the width of the lead region to be the smallest
-       ! floe size category, as per Horvat & Tziperman (2015)
-       width_leadreg=floe_rad_c(1)
-      
-      !-----------------------------------------------------------------
-      ! Loop over all gridcells. Only calculate these areas where there
-      ! is some ice
-      !-----------------------------------------------------------------
-
-       do j = jlo, jhi
-       do i = ilo, ihi
-      
-          lead_area(i,j) = c0
-          latsurf_area(i,j) = c0
-   
-          if (aice(i,j).gt.puny) then
-
-                ! lead area = sum of areas of annuli around all floes
-                do n=1,ncat       
-                        do k=1,nfsd
-                                lead_area(i,j) = lead_area(i,j) + &
-                                                 aicen(i,j,n) * trcrn(i,j,nt_fsd+k-1,n) * &
-                                                 ( c2*width_leadreg/floe_rad_c(k) + &
-                                                 width_leadreg**c2/floe_rad_c(k)**2)
-                        enddo !k
-                enddo !n
-       
-                ! cannot be greater than the open water fraction
-                lead_area(i,j)=MIN(lead_area(i,j),(c1-aice(i,j)))
-      
-                ! sanity checks
-                if (lead_area(i,j).gt.c1) stop 'lead_area not frac!'
-                if (lead_area(i,j).ne.lead_area(i,j)) stop 'lead_a NaN'
-                if (lead_area(i,j).lt.c0) then
-                        if (lead_area(i,j).lt.(c0-puny)) then
-                                stop 'lead_area lt0 in partition_area'
-                        else
-                                lead_area(i,j)=MAX(lead_area(i,j),c0)
-                        end if
-                end if
-
-                ! Total fractional lateral surface area in each grid (per unit ocean area)
-                do n=1,ncat
-                    thickness = c0
-                    if (aicen(i,j,n).gt.c0) thickness = vicen(i,j,n)/aicen(i,j,n)
-
-                        do k=1,nfsd
-                             latsurf_area(i,j) = latsurf_area(i,j) + &
-                                                    trcrn(i,j,nt_fsd+k-1,n) * aicen(i,j,n) * & ! FSD
-                                                    c2 * thickness/floe_rad_c(k)
-                        end do
-                end do 
-
-                ! check
-                if (latsurf_area(i,j).lt.c0) stop &
-                          'negative latsurf_ area'
-                if (lead_area(i,j).ne.lead_area(i,j)) stop &
-                          'latsurf_ area NaN'
-         end if ! aice
-       end do !i
-       end do !j
-
-              end subroutine partition_area
-
 
 !=======================================================================
 !
@@ -171,36 +45,37 @@
 !         Elizabeth C. Hunke, LANL
 !         Adrian Turner, LANL
 !
-              subroutine add_new_ice_lat (nx_block,  ny_block,   &
-                                      ntrcr,     icells,     &
-                                      indxi,     indxj,      &
-                                      dt,                    &
-                                      lead_area, latsurf_area, & ! LR
-                                      aicen,     trcrn,      &
-                                      vicen,                 &
-                                      aice0,     aice,       &
-                                      frzmlt,    frazil,     &
-                                      vlateral,              &
-                                      frz_onset, yday,       &
-                                      update_ocn_f,          &
-                                      fresh,     fsalt,      &
-                                      Tf,        sss,        &
-                                      salinz,    phi_init,   &
-                                      dSin0_frazil,          &
-                                      nbtrcr,    flux_bio,   &
-                                      ocean_bio, &
-                                      l_stop,                &
-                                      istop,     jstop      , &
-                                      d_an_latg,        d_an_addnew,    &
-                                      d_afsd_latg,      d_afsd_addnew,  &
-                                      d_amfstd_latg,    d_amfstd_addnew,&
-                                      G_radial,         tarea, &
-                                      wave_spectrum, wave_hs_in_ice )
+      subroutine add_new_ice_lat (nx_block,  ny_block,   &
+                              ntrcr,     icells,     &
+                              indxi,     indxj,      &
+                              dt,                    &
+                              lead_area, latsurf_area, & ! LR
+                              aicen,     trcrn,      &
+                              vicen,                 &
+                              aice0,     aice,       &
+                              frzmlt,    frazil,     &
+                              vlateral,              &
+                              frz_onset, yday,       &
+                              update_ocn_f,          &
+                              fresh,     fsalt,      &
+                              Tf,        sss,        &
+                              salinz,    phi_init,   &
+                              dSin0_frazil,          &
+                              nbtrcr,    flux_bio,   &
+                              ocean_bio, &
+                              l_stop,                &
+                              istop,     jstop      , &
+                              d_an_latg,        d_an_addnew,    &
+                              d_afsd_latg,      d_afsd_addnew,  &
+                              d_amfstd_latg,    d_amfstd_addnew,&
+                              G_radial,         tarea, &
+                              wave_spectrum, wave_hs_in_ice )
          
               use ice_domain_size, only: nilyr, n_aero 
         ! LR
               use ice_fsd, only: floe_rad_c, floe_binwidth, &
-                                 floe_area_l, floe_area_h, nfreq, wave_dep_growth
+                                 floe_area_l, floe_area_h, nfreq, wave_dep_growth, &
+                                 new_ice_fs
         ! LR     
               use ice_itd, only: hin_max, column_sum, &
                                  column_conservation_check 
@@ -1164,188 +1039,6 @@
 
 
 !=======================================================================
-
-!=======================================================================
-
-        subroutine floe_merge_thermo(iblk,nx_block, ny_block, &
-                                    ntrcr, icells, indxi, indxj, & 
-                                    dt, &
-                                    aice, aicen, frzmlt, areal_mfstd, &
-                                    d_amfstd_merge, d_afsd_merge)
-
-        use ice_fsd, only: area_scaled_h, &  ! and no binwidth is greater than 1
-                           area_scaled_c, &  ! (dimensionless)
-                           area_scaled_binwidth, &
-                           alpha_mrg, &      ! defines floe combinations
-                           c_mrg ! units (s^-1)
-                        
-
-      integer (kind=int_kind), intent(in) :: &
-         iblk, &
-         nx_block, ny_block, & ! block dimensions
-         ntrcr             , & ! number of tracers in use
-         icells                ! number of ice/ocean grid cells
-
-      integer (kind=int_kind), dimension (nx_block*ny_block), &
-         intent(in) :: &
-         indxi,  indxj         ! compressed i/j indices
-
-     real (kind=dbl_kind), intent(in) :: &
-         dt        ! time step (s)
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat), &
-         intent(in) :: &
-         aicen   ! concentration of ice
- 
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
-         aice  , & ! total concentration of ice
-         frzmlt    ! freezing/melting potential (W/m^2)
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nfsd,ncat), &
-         intent(inout) :: &
-         areal_mfstd, &
-         d_amfstd_merge
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nfsd), &
-         intent(inout) :: &
-         d_afsd_merge
-
-      ! local variables
-
-      integer (kind=int_kind) :: &
-        t, &
-        i, j, n, k, ij, m, &
-        kx, ky, kz, a
-
-      real (kind=dbl_kind), dimension(nfsd) :: &
-        amfstd_init, amfstd_tmp, coag_pos, coag_neg
-
-      real(kind=dbl_kind) :: &
-        subdt, &
-        area_loss, &    !
-        area_loss_mcat, &
-        stability       ! what needs to be one to satisfy
-                        ! stability condition for Smol. eqn.
-
-      integer(kind=int_kind) :: &
-        ndt_mrg         ! number of sub-timesteps required to satisfy
-                        ! stability condition for Smol. eqn.
-
-
-      
-        do ij = 1, icells
-            do n=1,ncat
-          
-                        i = indxi(ij)
-                        j = indxj(ij)
- 
-                        
-                        d_afsd_merge(i,j,:) = c0
-                        d_amfstd_merge(i,j,:,n) = c0
-        
-                      
-                        !-----------------------------------------------------------------
-                        ! If there is some ice in the lower (nfsd-1) categories
-                        ! and there is freezing potential
-                        !-----------------------------------------------------------------
-                        if ((frzmlt(i,j).gt.puny).and.(aicen(i,j,n).gt.p1).and.(SUM(areal_mfstd(i,j,:nfsd-1,n)).gt.puny)) then
-
-                               ! time step limitations for merging
-                                stability = dt * c_mrg * aicen(i,j,n) * area_scaled_h(nfsd)
-                                ndt_mrg = NINT(stability+p5) ! add .5 to round up                        
-                                subdt = dt/FLOAT(ndt_mrg)
- 
-                                amfstd_init(:) = areal_mfstd(i,j,:,n)
-                                amfstd_tmp = amfstd_init
-
-                                if (ABS(SUM(amfstd_init) - c1).gt.puny) stop 'not 1 b4 mrg'
-                                if (ANY(amfstd_init.lt.c0-puny)) stop &
-                                 'negative mFSTD b4 mrg'
-                                if (ANY(amfstd_init.gt.c1+puny)) stop &
-                                 'mFSTD>1 b4 mrg'
-
-                                area_loss_mcat = c0
-                                do t = 1, ndt_mrg
-                                     do kx = 1, nfsd
-
-                                         coag_pos(kx) = c0
-                                         do ky = 1, kx
-                                             a = alpha_mrg(kx,ky)
-                                             coag_pos(kx) = coag_pos(kx) + &
-                                                            area_scaled_c(ky) * amfstd_tmp(ky) * aicen(i,j,n) * ( &
-                                                            SUM(amfstd_tmp(a:nfsd)) + &
-                                                            (amfstd_tmp(a-1)/area_scaled_binwidth(a-1)) * ( &
-                                                            area_scaled_h(a-1) - area_scaled_h(kx) + area_scaled_c(ky) ))
-       
-                                         end do
-                                     end do
-
-                                     coag_neg(1) = c0 ! cannot gain in smallest cat
-                                     coag_neg(2:nfsd) = coag_pos(1:nfsd-1)
-
-                                     amfstd_tmp = amfstd_tmp - subdt*c_mrg*(coag_pos - coag_neg)
- 
-                                     if (ANY(amfstd_tmp.lt.c0-puny)) then
-                                            print *, 'amfstd_init ',amfstd_init
-                                            print *, 'coag_pos',coag_pos
-                                            print *, 'coag_neg',coag_neg
-                                            print *, 'amfstd_tmp ',amfstd_tmp
-                                            print *, &
-                                      'WARNING negative mFSTD mrg, l'
-                                     end if
-
-
-                                     if (ANY(amfstd_tmp.lt.c0-puny)) &
-                                            stop 'negative mFSTD mrg, l'
-
-                                     if (ANY(amfstd_tmp.gt.c1+puny)) &
-                                            stop ' mFSTD> 1 mrg, l'
-
-                                     if (ANY(dt*c_mrg*coag_pos.lt.-puny)) &
-                                         stop 'not positive'
-
-                                     area_loss_mcat = area_loss_mcat + subdt*c_mrg*coag_pos(nfsd)
-
-                                end do
-                                
-                                ! ignore loss in largest cat
-                                amfstd_tmp(nfsd) = amfstd_tmp(nfsd) + area_loss_mcat
-
-                                area_loss = SUM(amfstd_init) - SUM(amfstd_tmp)
-
-                                if (area_loss.lt.-puny) &
-                                    stop 'area gain'
-
-                                if (ABS(area_loss).gt.puny) &
-                                    stop 'area change after correction'
-                                
-                                ! in case of small numerical errors
-                                areal_mfstd(i,j,:,n) = amfstd_tmp/SUM(amfstd_tmp)
-
-                                if (ANY(areal_mfstd(i,j,:,n).lt.-puny)) stop 'neg, mrg'
-
-                                WHERE(areal_mfstd(i,j,:,n).lt.c0) areal_mfstd(i,j,:,n) = c0
-                                
-                                if (areal_mfstd(i,j,1,n).gt.amfstd_init(1)+puny) & 
-                                    stop 'gain in smallest cat'
-
-                                d_amfstd_merge(i,j,:,n) = areal_mfstd(i,j,:,n) - amfstd_init
-
-                        end if
-               end do !n
-     
-               do k=1,nfsd
-                    d_afsd_merge(i,j,k) = c0
-                    do n=1,ncat
-                        d_afsd_merge(i,j,k) = d_afsd_merge(i,j,k)  + &
-                        aicen(i,j,n)* d_amfstd_merge(i,j,k,n)
-                    end do
-               end do
-
-
-        end do!ij 
-
-           end subroutine floe_merge_thermo
 
 !=======================================================================
 !

@@ -26,6 +26,7 @@
                                  n_aero, max_ntrcr
       use ice_fileunits, only: nu_diag
 
+
       implicit none
       save
       
@@ -33,7 +34,7 @@
       public :: update_vertical_tracers, lateral_melt, linear_itd, &
                 add_new_ice
 ! LR
-      ! now public so it can be used in ice_fsd_thermo
+      ! now public so it can be used elsewhere
       logical (kind=log_kind), parameter, public :: & 
          l_conservation_check = .false.   ! if true, check conservation
                                           ! (useful for debugging)
@@ -1087,7 +1088,7 @@
          vsnon       ! volume per unit area of snow         (m)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_ntrcr,ncat), &
-         intent(in) :: &
+         intent(inout) :: &
          trcrn     ! tracer array
 
       real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) :: &
@@ -1450,6 +1451,8 @@
               enddo  ! n
 
                     end subroutine lateral_melt
+
+
 
 
 !=======================================================================

@@ -103,8 +103,7 @@
       use shr_file_mod, only: shr_file_setIO
 #endif
 ! CMB LR
-      use ice_fsd, only: restart_fsd, c_mrg
-      use ice_fsd_thermo, only: new_ice_fs
+      use ice_fsd, only: restart_fsd, c_mrg, new_ice_fs
       use ice_domain_size, only: nfsd
       use ice_state, only: tr_fsd, nt_fsd
 ! CMB LR

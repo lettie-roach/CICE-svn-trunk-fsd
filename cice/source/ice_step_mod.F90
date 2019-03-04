@@ -202,9 +202,8 @@
       use ice_timers, only: ice_timer_start, ice_timer_stop, timer_ponds
 ! LR CMB liuxy
       use ice_flux, only: fbottom, flateral, lead_area, latsurf_area
-      use ice_fsd_thermo, only: partition_area
       use ice_domain_size, only: nfsd
-      use ice_fsd, only: renorm_mfstd
+      use ice_fsd, only: renorm_mfstd, partition_area
       use ice_flux, only: rside_itd
 ! LR CMB liuxy
 
@@ -799,10 +798,10 @@
                           lead_area, latsurf_area, vlateral, &
                           sst, Tf, &
                           G_radial, wave_spectrum, wave_hs_in_ice                
-      use ice_fsd_thermo, only: partition_area, &
-                                floe_merge_thermo, &
-                                add_new_ice_lat
+      use ice_fsd_thermo, only: add_new_ice_lat
        use ice_fsd, only:renorm_mfstd, &
+                         partition_area, &
+                         floe_merge_thermo, &
                          d_afsd_latg, d_amfstd_latg, d_an_latg, &
                          d_afsd_addnew, d_amfstd_addnew, d_an_addnew, &
                          d_afsd_latm, d_amfstd_latm, d_an_latm, &
