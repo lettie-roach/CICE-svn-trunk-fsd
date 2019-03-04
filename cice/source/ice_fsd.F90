@@ -23,7 +23,6 @@
       private
       public :: init_fsd, init_fsd_bounds,     &
           write_restart_fsd, read_restart_fsd, &
-          frzmlt_bottom_lateral_fsd, &
           renorm_mfstd, wave_dep_growth 
 
       logical (kind=log_kind), public :: & 
@@ -319,309 +318,6 @@
       end subroutine read_restart_fsd
 
 !=======================================================================
-! Modified from frzmlt_bottom_lateral 
-! rside becomes a function of itd ncat because 
-! floes are not assumed to be same size
-! in fact rside is also a function of nfsd but 
-! I sum it over the fsd here to get rside_itd
-! that can later be used to melt apply to aicen, vicen, etc
-! remember that the heat to the ocean is going to come out of variable ?
-! in lateral_melt
-! a lot of the work here is to simply ensure that no more ice 
-! melts than is available
-!
-! Compute heat flux to bottom surface.
-! Compute fraction of ice that melts laterally.
-!
-! authors C. M. Bitz, UW
-!         William H. Lipscomb, LANL
-!         Elizabeth C. Hunke, LANL
-!         
-! 2016: Lettie Roach modified slightly to allow fside and fbot to be 
-!       diagnostic output
-
-      subroutine frzmlt_bottom_lateral_fsd (nx_block, ny_block, &
-                                        ilo, ihi, jlo, jhi, &
-                                        ntrcr,    dt,       &
-                                        aice,     aicen,    & 
-                                        lead_area,          &
-                                        frzmlt,             &
-                                        vicen,    vsnon,    &
-                                        trcrn,              &
-                                        sst,      Tf,       &
-                                        strocnxT, strocnyT, &
-                                        Tbot,     fbot,     &
-                                        fside,   Cdn_ocn    )
-
-       use ice_domain_size, only: ncat,nfsd,nilyr,nslyr
-       use ice_constants, only: c1
-       use ice_therm_vertical, only: ustar_min, fbot_xfer_type
-       use ice_state, only: nt_qice, nt_qsno, nt_fsd
-
-      integer (kind=int_kind), intent(in) :: &
-         nx_block, ny_block, & ! block dimensions
-         ilo,ihi,jlo,jhi   , & ! beginning and end of physical domain
-         ntrcr                 ! number of tracers
-
-      real (kind=dbl_kind), intent(in) :: &
-         dt                  ! time step
-
-      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) :: &
-         lead_area,& ! area near ice
-         aice    , & ! ice concentration
-         frzmlt  , & ! freezing/melting potential (W/m^2)
-         sst     , & ! sea surface temperature (C)
-         Tf      , & ! freezing temperature (C)
-         Cdn_ocn , & ! ocean-ice neutral drag coefficient
-         strocnxT, & ! ice-ocean stress, x-direction
-         strocnyT    ! ice-ocean stress, y-direction
-
-      real (kind=dbl_kind), dimension(nx_block,ny_block,ncat), &
-         intent(in) :: &
-         aicen   , & ! ITD
-         vicen   , & ! ice volume (m)
-         vsnon       ! snow volume (m)
-
-      real (kind=dbl_kind), dimension(nx_block,ny_block,ntrcr,ncat), &   ! needs to be ntrcr here to match call
-         intent(in) :: &
-         trcrn       ! tracer array
-
-      real (kind=dbl_kind), dimension(nx_block,ny_block), &
-         intent(out) :: &
-         Tbot    , & ! ice bottom surface temperature (deg C)
-         fbot    , & ! heat flux to ice bottom  (W/m^2)
-         fside       ! lateral heat flux (W/m^2) !LR
-
-      ! local variables
-! LR made this a local variable
-      real (kind=dbl_kind), dimension(nx_block,ny_block,ncat) :: &
-        rside_itd       ! fraction of ice that melts laterally
-
-      real (kind=dbl_kind), dimension(ncat) :: &
-        delta_an       ! amount of ice that melts laterally
-! LR
-
-      integer (kind=int_kind) :: &
-         i, j           , & ! horizontal indices
-         n              , & ! thickness category index
-         k              , & ! layer index
-         ij             , & ! horizontal index, combines i and j loops
-         imelt              ! number of cells with ice melting
-
-      integer (kind=int_kind), dimension (nx_block*ny_block) :: &
-         indxi, indxj     ! compressed indices for cells with ice melting
-
-      real (kind=dbl_kind), dimension (:), allocatable :: &
-         etot        ! total energy in column
-! LR         fside       ! lateral heat flux (W/m^2)
-
-
-      real (kind=dbl_kind) :: &
-! LR
-        smfloe_arealoss, & ! change in area due to floes melting out of the
-                         ! smallest floe size category
-        G_radial   , & ! lateral melt rate, equal to negative wlat
-! LR
-         deltaT    , & ! SST - Tbot >= 0
-         ustar     , & ! skin friction velocity for fbot (m/s)
-         xtmp          ! temporary variable
-
-      ! Parameters for bottom melting
-
-      real (kind=dbl_kind) :: &
-         cpchr         ! -cp_ocn*rhow*exchange coefficient
-
-      ! Parameters for lateral melting
-
-      real (kind=dbl_kind), parameter :: &
-! LR     floediam = 300.0_dbl_kind, & ! effective floe diameter (m)
-! LR     floeshape = 0.66_dbl_kind , & ! constant from Steele (unitless)
-         m1 = 1.6e-6_dbl_kind     , & ! constant from Maykut & Perovich
-                                      ! (m/s/deg^(-m2))
-         m2 = 1.36_dbl_kind           ! constant from Maykut & Perovich
-                                      ! (unitless)
-
-      real (kind=dbl_kind), dimension(nx_block,ny_block) :: &
-         wlat        ! lateral melt rate (m/s)
-
-
-      ! LR fbot and fside will be zero if aice<puny or frzmlt < 0
-
-
-      Tbot = Tf
-      fbot = c0
-      fside = c0 ! LR
-      rside_itd = c0
-
-      !-----------------------------------------------------------------
-      ! Identify grid cells where ice can melt.
-      !-----------------------------------------------------------------
-
-      imelt = 0
-      do j = jlo, jhi
-      do i = ilo, ihi
-         if (aice(i,j) > puny .and. frzmlt(i,j) < c0) then ! ice can melt
-            imelt = imelt + 1
-            indxi(imelt) = i
-            indxj(imelt) = j
-         endif
-      enddo                     ! i
-      enddo                     ! j
-
-      allocate(etot (imelt))
-! LR      allocate(fside(imelt))
-
-      do ij = 1, imelt  ! cells where ice can melt
-         i = indxi(ij)
-         j = indxj(ij)
-
-! LR         fside(ij) = c0
-
-      !-----------------------------------------------------------------
-      ! Use boundary layer theory for fbot.
-      ! See Maykut and McPhee (1995): JGR, 100, 24,691-24,703.
-      !-----------------------------------------------------------------
-
-         deltaT = max((sst(i,j)-Tbot(i,j)),c0)
-
-         ! strocnx has units N/m^2 so strocnx/rho has units m^2/s^2
-         ustar = sqrt (sqrt(strocnxT(i,j)**2+strocnyT(i,j)**2)/rhow)
-         ustar = max (ustar,ustar_min)
-
-         if (trim(fbot_xfer_type) == 'Cdn_ocn') then
-            ! Note: Cdn_ocn has already been used for calculating ustar 
-            ! (formdrag only) --- David Schroeder (CPOM)
-            cpchr = -cp_ocn*rhow*Cdn_ocn(i,j)
-         else ! fbot_xfer_type == 'constant'
-            ! 0.006 = unitless param for basal heat flx ala McPhee and Maykut
-            cpchr = -cp_ocn*rhow*0.006_dbl_kind
-         endif
-
-         fbot(i,j) = cpchr * deltaT * ustar ! < 0
-
-         fbot(i,j) = max (fbot(i,j), frzmlt(i,j)) ! frzmlt < fbot < 0
-
-!!! uncomment to use all frzmlt for standalone runs
-!        fbot(i,j) = min (c0, frzmlt(i,j))  !liuxy: if uncommentted, ic is larger in the margin of ice cover in Summer
-
-      !-----------------------------------------------------------------
-      ! Compute rside.  See these references:
-      !    Maykut and Perovich (1987): JGR, 92, 7032-7044
-      !    Hovart and Tziperman (2015): TC ?
-      !-----------------------------------------------------------------
-
-         wlat(i,j) = m1 * deltaT**m2 ! Maykut & Perovich 
-         ! choose that this equals -Gr in Hovart
-         G_radial = - wlat(i,j)
-
-         ! LR - Compute rside but only to compute the lateral heat flux, fside
-         ! The ITD and mFSTD are only actually evolved in ice_fsd_thermo,
-         ! lateral_melt_fsdtherm subroutine
-         ! We need to compute fside and not just wlat, because fside may
-         ! be reduced so that fside + bottom < frzmlt
-         rside_itd(i,j,:) = 0
-         do n = 1, ncat
-                       
-                smfloe_arealoss = - trcrn(i,j,nt_fsd+1-1,n) / floe_binwidth(1) * &
-                                dt * G_radial * aicen(i,j,n)
-                
-                delta_an(n)=c0
-                do k=1,nfsd
-                        ! delta_an is negative
-                        delta_an(n) = delta_an(n) + ((c2/floe_rad_c(k))*aicen(i,j,n)* &
-                                               trcrn(i,j,nt_fsd+k-1,n)*G_radial*dt) 
-                end do                                                 
-          
-                ! add negative area loss from fsd
-                delta_an(n) = delta_an(n) - smfloe_arealoss
-
-                if(delta_an(n).gt.c0) stop 'delta_an gt0'
-
-                ! to give same definition as in orginal code
-                if (aicen(i,j,n).gt.c0) rside_itd(i,j,n)=-delta_an(n)/aicen(i,j,n) 
-                ! otherwise rside_itd remains zero
-
-                if (rside_itd(i,j,n).lt.c0) stop 'rside lt0'
-
-         enddo ! n
-
-
-
-      enddo                     ! ij
-
-
-      !-----------------------------------------------------------------
-      ! Compute heat flux associated with this value of rside.
-      !-----------------------------------------------------------------
-
-      do n = 1, ncat
-
-         do ij = 1, imelt
-            etot(ij) = c0
-         enddo
-
-         ! melting energy/unit area in each column, etot < 0
-
-         do k = 1, nslyr
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-            do ij = 1, imelt
-               i = indxi(ij)
-               j = indxj(ij)
-               etot(ij) = etot(ij) + trcrn(i,j,nt_qsno+k-1,n) &
-                                   * vsnon(i,j,n)/real(nslyr,kind=dbl_kind)
-            enddo               ! ij
-         enddo
-
-         do k = 1, nilyr
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-            do ij = 1, imelt
-               i = indxi(ij)
-               j = indxj(ij)
-               etot(ij) = etot(ij) + trcrn(i,j,nt_qice+k-1,n) &
-                                   * vicen(i,j,n)/real(nilyr,kind=dbl_kind)
-            enddo               ! ij
-         enddo                  ! nilyr
-
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-         do ij = 1, imelt
-            i = indxi(ij)
-            j = indxj(ij)
-            ! lateral heat flux
-	    ! CMB note rside is unique for each itd category 
-            fside(i,j) = fside(i,j) + rside_itd(i,j,n)*etot(ij)/dt ! fside < 0
-         enddo                  ! ij
-
-      enddo                     ! n
-
-      !-----------------------------------------------------------------
-      ! Limit bottom and lateral heat fluxes if necessary.
-      !-----------------------------------------------------------------
-
-      do ij = 1, imelt
-         i = indxi(ij)
-         j = indxj(ij)
-
-         xtmp = frzmlt(i,j)/(fbot(i,j) + fside(i,j) + puny)  
-
-         xtmp = min(xtmp, c1)
-         fbot (i,j) = fbot (i,j) * xtmp
-! LR
-	 fside (i,j) = fside (i,j) * xtmp  
-! LR 
-      enddo                     ! ij
-        
-      deallocate(etot)
-! LR      deallocate(fside)
-
-      end subroutine frzmlt_bottom_lateral_fsd
-
-!=======================================================================
 !
 ! Normalize the floe size distribution so it sums to one in cells with ice.
 ! The FSD is zero is cells with no ice
@@ -653,10 +349,9 @@
              i,j, k
 
 
-        do n=1,ncat
-
-                do j = 1,ny_block
-                do i = 1,nx_block
+        do j = 1,ny_block
+        do i = 1,nx_block
+            do n=1,ncat
 
                 if (aicen(i,j,n).lt.c0) stop 'negative aice'
                 
@@ -686,9 +381,9 @@
                         end if
                 end if
 
-                enddo !i
-                enddo !j
-        enddo !n
+            enddo !n
+        enddo !i
+        enddo !j
 
       end subroutine renorm_mfstd
 
@@ -761,7 +456,6 @@
           end if
       end do
 
-!!      print *, 'hs = ',h_s,'; hs2 = ',wave_hs_in_ice,'; wl = ',w_l,'; new fs cat = ',new_size
       end if
 
       end subroutine wave_dep_growth

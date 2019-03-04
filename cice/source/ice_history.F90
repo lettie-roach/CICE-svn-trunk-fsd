@@ -167,12 +167,6 @@
         f_dafsdlatm = 'x'
         f_dafsdlatg = 'x'
         f_danlatg   = 'x'
-        f_damfstdmrg = 'x'
-        f_damfstdwave ='x'
-        f_damfstdani = 'x'
-        f_damfstdlatm = 'x'
-        f_damfstdlatg = 'x'
-        f_areal_mfstd_tilda = 'x'
         f_leadarea  = 'x'
         f_latsurfarea = 'x'
         f_vlateral = 'x'
@@ -262,17 +256,11 @@
       call broadcast_scalar (f_hm, master_task)
       call broadcast_scalar (f_areal_fsd, master_task)
       call broadcast_scalar (f_areal_fstd, master_task)
-      call broadcast_scalar (f_areal_mfstd_tilda, master_task)
       call broadcast_scalar (f_dafsdani, master_task)
       call broadcast_scalar (f_dafsdlatm, master_task)
       call broadcast_scalar (f_dafsdwave, master_task)
       call broadcast_scalar (f_dafsdmrg, master_task)
       call broadcast_scalar (f_dafsdlatg, master_task)
-      call broadcast_scalar (f_damfstdani, master_task)
-      call broadcast_scalar (f_damfstdlatm, master_task)
-      call broadcast_scalar (f_damfstdwave, master_task)
-      call broadcast_scalar (f_damfstdmrg, master_task)
-      call broadcast_scalar (f_damfstdlatg, master_task)
       call broadcast_scalar (f_danani, master_task)
       call broadcast_scalar (f_danlatm, master_task)
       call broadcast_scalar (f_danlatg, master_task)
@@ -1208,35 +1196,7 @@
               "per unit bin width",        &
                c1, c0, ns1, f_areal_fstd)
 
-           call define_hist_field(n_areal_mfstd_tilda, & 
-               "areal_mfstd","1",tstr4Df, tcstr, & 
-              "areal modified floe size and thickness distribtution",    &
-              "includes bin width",        &
-               c1, c0, ns1, f_areal_mfstd_tilda)
-
-
-           call define_hist_field(n_damfstdani,"damfstdani","1",tstr4Df, tcstr, & 
-              "Change in fnk - ani",    &
-              "Avg over freq period",        &
-               c1, c0, ns1, f_damfstdani)
-           call define_hist_field(n_damfstdlatm,"damfstdlatm","1",tstr4Df, tcstr, & 
-              "Change in fnk - latm",    &
-              "Avg over freq period",        &
-               c1, c0, ns1, f_damfstdlatm)
-           call define_hist_field(n_damfstdmrg,"damfstdmrg","1",tstr4Df, tcstr, & 
-              "Change in fnk - merge",    &
-              "Avg over freq period",        &
-               c1, c0, ns1, f_damfstdmrg)
-           call define_hist_field(n_damfstdwave,"damfstdwave","1",tstr4Df, tcstr, & 
-              "Change in fnk - waves",    &
-              "Avg over freq period",        &
-               c1, c0, ns1, f_damfstdwave)
-           call define_hist_field(n_damfstdlatg,"damfstdlatg","1",tstr4Df, tcstr, & 
-              "Change in fnk - 3",    &
-              "Avg over freq period",        &
-               c1, c0, ns1, f_damfstdlatg)
-
-            endif ! if (histfreq(ns1) /= 'x') then
+      endif ! if (histfreq(ns1) /= 'x') then
       enddo ! ns1
 ! LR
 
@@ -2043,26 +2003,6 @@
           call accum_hist_field(n_areal_fstd-n4Dbcum, iblk, nfsd_hist, ncat_hist, &
                                   workd, a4Df)
         end if
-
-        if (f_areal_mfstd_tilda     (1:1) /= 'x') call & 
-                                     accum_hist_field(n_areal_mfstd_tilda-n4Dbcum, &
-                                     iblk, nfsd_hist, ncat_hist, trcrn(:,:,nt_fsd:nt_fsd+nfsd-1,:,iblk), a4Df)
-
-        if (f_damfstdani     (1:1) /= 'x') call &
-                                        accum_hist_field (n_damfstdani-n4Dbcum, &
-                                        iblk, nfsd_hist, ncat_hist,d_amfstd_addnew(:,:,:,:,iblk), a4Df)        
-        if (f_damfstdlatm     (1:1) /= 'x') call &
-                                         accum_hist_field(n_damfstdlatm-n4Dbcum, &
-                                         iblk, nfsd_hist, ncat_hist, d_amfstd_latm(:,:,:,:,iblk), a4Df)
-        if (f_damfstdwave     (1:1) /= 'x') call &
-                                         accum_hist_field(n_damfstdwave-n4Dbcum, &
-                                         iblk, nfsd_hist, ncat_hist, d_amfstd_wave(:,:,:,:,iblk), a4Df)
-        if (f_damfstdmrg     (1:1) /= 'x') call & 
-                                         accum_hist_field(n_damfstdmrg-n4Dbcum, &
-                                         iblk, nfsd_hist, ncat_hist, d_amfstd_merge(:,:,:,:,iblk), a4Df)
-        if (f_damfstdlatg     (1:1) /= 'x') call & 
-                                         accum_hist_field(n_damfstdlatg-n4Dbcum, &
-                                         iblk, nfsd_hist, ncat_hist, d_amfstd_latg(:,:,:,:,iblk), a4Df)
 ! LR
         ! Calculate aggregate surface melt flux by summing category values
         if (f_fmeltt_ai(1:1) /= 'x') then

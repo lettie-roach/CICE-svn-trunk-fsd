@@ -1035,24 +1035,36 @@
       end subroutine update_vertical_tracers
 
 !=======================================================================
-!
-! Given the fraction of ice melting laterally in each grid cell
-!  (computed in subroutine frzmlt_bottom_lateral), melt ice.
-!
+! Melts the ice thickness distribution and the floe size distribution, 
+! given fside, which was computed in frzmlt_bottom_lateral_fsdtherm
+! 
 ! author: C. M. Bitz, UW
 ! 2003:   Modified by William H. Lipscomb and Elizabeth C. Hunke, LANL
-!
-      subroutine lateral_melt (nx_block,   ny_block,   &
+! 2016:   Modified by C. M. Bitz, UW, to add floe effects
+!         Further modified by L. Roach, NIWA
+
+
+      subroutine lateral_melt & 
+                              (nx_block,   ny_block,   &
                                ilo, ihi,   jlo, jhi,   &
                                dt,         fpond,      &
                                fresh,      fsalt,      &
                                fhocn,      faero_ocn,  &
                                rside,      meltl,      &
                                aicen,      vicen,      &
-                               vsnon,      trcrn)
+                               vsnon,      trcrn,      &
+                               fside,      frzmlt,      &
+                               sss,     dSin0_frazil,  &
+                               phi_init,  salinz,      &
+                               G_radial )
 
-      use ice_state, only: nt_qice, nt_qsno, &
-                           nt_aero, tr_aero, tr_pond_topo, nt_apnd, nt_hpnd
+      use ice_state, only: nt_qice, nt_qsno, nt_aero, tr_aero, &
+                           tr_pond_topo, nt_apnd, nt_hpnd, tr_fsd, nt_fsd
+      use ice_domain_size,only: nilyr, nslyr, n_aero, nfsd, &
+                                max_aero, max_ntrcr
+      use ice_fsd, only: floe_rad_c, floe_binwidth
+      use ice_therm_mushy, only: liquidus_temperature_mush, enthalpy_mush
+      use ice_therm_shared, only: ktherm
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -1061,21 +1073,32 @@
       real (kind=dbl_kind), intent(in) :: &
          dt        ! time step (s)
 
+       real (kind=dbl_kind), intent(in) :: &
+         phi_init     , & ! initial frazil liquid fraction
+         dSin0_frazil     ! initial frazil bulk salinity reduction from sss
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block,nilyr+1), intent(in) :: &
+         salinz           ! initial salinity profile 
+
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat), &
-         intent(inout) :: &
+         intent(inout) :: & !inout
          aicen   , & ! concentration of ice
          vicen   , & ! volume per unit area of ice          (m)
          vsnon       ! volume per unit area of snow         (m)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_ntrcr,ncat), &
-         intent(in) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_ntrcr,ncat), &  ! needs to be max_ntrcr here
+         intent(inout) :: & !inout
          trcrn     ! tracer array
 
       real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) :: &
-         rside     ! fraction of ice that melts laterally
+         rside, &     ! fraction of ice that melts laterally
+         fside, &     ! flux that goes to lateral melt (m/s)
+         frzmlt, &    ! freezing/melting potential (Wm/m^2)
+         sss          ! sea surface salinity (ppt)
 
       real (kind=dbl_kind), dimension(nx_block,ny_block), &
-         intent(inout) :: &
+         intent(inout) :: & !inout
+         G_radial  , & ! rate of lateral melt (m/s)
          fpond     , & ! fresh water flux to ponds (kg/m^2/s)
          fresh     , & ! fresh water flux to ocean (kg/m^2/s)
          fsalt     , & ! salt flux to ocean (kg/m^2/s)
@@ -1083,7 +1106,7 @@
          meltl         ! lateral ice melt         (m/step-->cm/day)
   
       real (kind=dbl_kind), dimension(nx_block,ny_block,max_aero), &
-         intent(inout) :: &
+         intent(inout) :: & !intout
          faero_ocn     ! aerosol flux to ocean (kg/m^2/s)
 
       ! local variables
@@ -1091,7 +1114,7 @@
       integer (kind=int_kind) :: &
          i, j        , & ! horizontal indices
          n           , & ! thickness category index
-         k           , & ! layer index
+         k, kk       , & ! layer index
          ij          , & ! horizontal index, combines i and j loops
          icells          ! number of cells with aice > puny
 
@@ -1099,20 +1122,48 @@
          indxi, indxj    ! compressed indices for cells with aice > puny
 
       real (kind=dbl_kind) :: &
+         totfrac , & ! used to renormalize floe size dist
          dfhocn  , & ! change in fhocn
          dfpond  , & ! change in fpond
          dfresh  , & ! change in fresh
-         dfsalt      ! change in fsalt
+         dfsalt  , & ! change in fsalt
+         Ti          ! frazil temperature
 
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
-         vicen_init   ! volume per unit area of ice          (m)
+        vicen_init   ! volume per unit area of ice          (m)
+      
+      real (kind=dbl_kind), dimension (nfsd) :: &
+         areal_mfstd_final, & ! modified areal FSTD (tilda) 
+         fin_diff             ! finite difference for G_r * areal mFSTD tilda
 
-      do n = 1, ncat
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat) :: &
+         aicen_init, &
+         rside_itd         ! delta_an/aicen
 
-      !-----------------------------------------------------------------
-      ! Identify grid cells with lateral melting.
-      !-----------------------------------------------------------------
+      real (kind=dbl_kind), dimension (ncat) :: &
+         delta_an        ! change in the ITD
 
+     real (kind=dbl_kind), dimension (nx_block,ny_block,nfsd,ncat) :: & 
+         areal_mfstd_init
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
+         qi0          , & ! frazil ice enthalpy
+         Si0              ! frazil ice bulk salinity
+
+      real (kind=dbl_kind) :: cat1_arealoss
+
+      real (kind=dbl_kind), dimension(nfsd+1) :: &
+        f_flx
+
+     ! initialization
+     rside_itd = c0
+     aicen_init = aicen          
+
+     if (.NOT.tr_fsd) then ! use rside calculated in frzmlt_bottom_lateral
+
+        !-----------------------------------------------------------------
+        ! Identify grid cells with lateral melting.
+        !-----------------------------------------------------------------
          icells = 0
          do j = jlo, jhi
          do i = ilo, ihi
@@ -1124,99 +1175,282 @@
          enddo                  ! i
          enddo                  ! j
 
-      !-----------------------------------------------------------------
-      ! Melt the ice and increment fluxes.
-      !-----------------------------------------------------------------
+         ! set rside_itd to be the same in all thickness categories
+         do n = 1, ncat
+            rside_itd(:,:,n) = rside(:,:)
+         end do
 
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
+     else ! calculate rside_itd using FSD
+
+         areal_mfstd_init = trcrn(:,:,nt_fsd:nt_fsd+nfsd-1,:)
+         !-----------------------------------------------------------------
+         ! Identify grid cells with lateral melt
+         !-----------------------------------------------------------------
+
+         icells = 0
+         do j = jlo, jhi
+         do i = ilo, ihi
+             if (fside(i,j) < c0) then
+                 icells = icells + 1
+                 indxi(icells) = i
+                 indxj(icells) = j
+             endif
+         enddo                  ! i
+         enddo                  ! j
+
+         !-----------------------------------------------------------------                                              
+         ! In these cells, ice can melt:                                                      
+         !-----------------------------------------------------------------                                              
+                                                                               
+ 
+     !DIR$ CONCURRENT !Cray                                                                                                
+     !cdir nodep      !NEC
+     !ocl novrec      !Fujitsu
          do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
+              i = indxi(ij)
+              j = indxj(ij)
+         
+              !-----------------------------------------------------------------
+              ! Compute average enthalpy of ice. (taken from add_new_ice)
+              ! Not sure if this is transferrable to existing ice?!?!
+              ! Sprofile is the salinity profile used when adding new ice to
+              ! all categories, for ktherm/=2, and to category 1 for all ktherm.
+              !
+              ! NOTE:  POP assumes new ice is fresh!
+              !-----------------------------------------------------------------
 
-            ! fluxes to coupler
-            ! dfresh > 0, dfsalt > 0, dfpond > 0
+              if (ktherm == 2) then  ! mushy
+        !DIR$ CONCURRENT !Cray
+        !cdir nodep      !NEC
+        !ocl novrec      !Fujitsu
+                    if (sss(i,j) > c2 * dSin0_frazil) then
+                       Si0(i,j) = sss(i,j) - dSin0_frazil
+                    else
+                       Si0(i,j) = sss(i,j)**2 / (c4*dSin0_frazil)
+                    endif
+                    Ti = min(liquidus_temperature_mush(Si0(i,j)/phi_init), -p1)
+                    qi0(i,j) = enthalpy_mush(Ti, Si0(i,j))
 
-            dfresh = (rhos*vsnon(i,j,n) + rhoi*vicen(i,j,n)) &
-                   * rside(i,j) / dt
-            dfsalt = rhoi*vicen(i,j,n)*ice_ref_salinity*p001 &
-                   * rside(i,j) / dt
-            fresh(i,j)      = fresh(i,j)      + dfresh
-            fsalt(i,j)      = fsalt(i,j)      + dfsalt
+              else
 
-            if (tr_pond_topo) then
-               dfpond = aicen(i,j,n) &
-                      * trcrn(i,j,nt_apnd,n) & 
-                      * trcrn(i,j,nt_hpnd,n) &
-                      * rside(i,j)
-               fpond(i,j) = fpond(i,j) - dfpond
-            endif
+        !DIR$ CONCURRENT !Cray
+        !cdir nodep      !NEC
+        !ocl novrec      !Fujitsu
+                   qi0(i,j) = -rhoi*Lfresh
+                             
+              endif    ! ktherm
 
-            ! history diagnostics
-            meltl(i,j) = meltl(i,j) + vicen(i,j,n)*rside(i,j)
+              !-----------------------------------------------------------------
+              ! G_r is the lateral melt rate                                               
+              !-----------------------------------------------------------------
+ 
+              G_radial(i,j) = -fside(i,j)/qi0(i,j) !negative
+              if (G_radial(i,j).gt.c0) stop 'Gr pos for melt'                
+              !-----------------------------------------------------------------
+              ! Given G_r, compute change to the ITD
+              !-----------------------------------------------------------------
+              if (G_radial(i,j).lt.(c0-puny)) then
+                do n = 1, ncat
 
-            ! state variables
-            vicen_init(i,j) = vicen(i,j,n)
-            aicen(i,j,n) = aicen(i,j,n) * (c1 - rside(i,j))
-            vicen(i,j,n) = vicen(i,j,n) * (c1 - rside(i,j))
-            vsnon(i,j,n) = vsnon(i,j,n) * (c1 - rside(i,j))
-         enddo                  ! ij
+                    if (aicen(i,j,n).gt.puny) then
+                        if (ABS(SUM(areal_mfstd_init(i,j,:,n))-c1).gt.1.0e-9_dbl_kind) then
+                                print *, ABS(SUM(areal_mfstd_init(i,j,:,n))-c1)
+                                print *, SUM(areal_mfstd_init(i,j,:,n))
+                                print *, SUM(trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n))
+                                print *, &
+                        'WARNING init mFSTD not normed, lm'
+                        end if
+                        areal_mfstd_init(i,j,:,n) = areal_mfstd_init(i,j,:,n)/SUM(areal_mfstd_init(i,j,:,n)) 
+                    end if
 
-         do k = 1, nilyr
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-            do ij = 1, icells
-               i = indxi(ij)
-               j = indxj(ij)
+                        cat1_arealoss = - trcrn(i,j,nt_fsd+1-1,n) / floe_binwidth(1) * &
+                                        dt * G_radial(i,j)*aicen(i,j,n)
 
-               ! enthalpy tracers do not change (e/v constant)
-               ! heat flux to coupler for ice melt (dfhocn < 0)
-               dfhocn = trcrn(i,j,nt_qice+k-1,n)*rside(i,j) / dt &
-                      * vicen(i,j,n)/real(nilyr,kind=dbl_kind)
-               fhocn(i,j)      = fhocn(i,j)      + dfhocn
-            enddo               ! ij
-         enddo                  ! nilyr
+                        delta_an(n)=c0
+                        do k=1,nfsd
+                                ! delta_an is negative
+                                delta_an(n) = delta_an(n) + ((c2/floe_rad_c(k))*aicen(i,j,n)* &
+                                                       trcrn(i,j,nt_fsd+k-1,n)*G_radial(i,j)*dt) 
+                        end do                                                 
+                  
+                        ! add negative area loss from fsd
+                        delta_an(n) = delta_an(n) - cat1_arealoss
 
-         do k = 1, nslyr
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-            do ij = 1, icells
-               i = indxi(ij)
-               j = indxj(ij)
+                        if(delta_an(n).gt.c0) stop 'delta_an gt0'
+    
+                        ! to give same definition as in orginal code
+                        if (aicen(i,j,n).gt.c0) rside_itd(i,j,n)=-delta_an(n)/aicen(i,j,n) 
+                        ! otherwise rside_itd remains zero
 
-               ! heat flux to coupler for snow melt (dfhocn < 0)
+                        if (rside_itd(i,j,n).lt.c0) stop 'rside lt0'
+       
+                enddo ! n
+              end if ! G_r
 
-               dfhocn = trcrn(i,j,nt_qsno+k-1,n)*rside(i,j) / dt &
-                      * vsnon(i,j,n)/real(nslyr,kind=dbl_kind)
-               fhocn(i,j)      = fhocn(i,j)      + dfhocn
-            enddo               ! ij
-         enddo                  ! nslyr
+         enddo !ij
+    end if ! tr_fsd
 
-         if (tr_aero) then
-            do k = 1, n_aero
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-               do ij = 1, icells
-                  i = indxi(ij)
-                  j = indxj(ij)
-                  faero_ocn(i,j,k) = faero_ocn(i,j,k) + (vsnon(i,j,n) &
-                                   *(trcrn(i,j,nt_aero  +4*(k-1),n)   &
-                                   + trcrn(i,j,nt_aero+1+4*(k-1),n))  &
-                                                      +  vicen(i,j,n) &
-                                   *(trcrn(i,j,nt_aero+2+4*(k-1),n)   &
-                                   + trcrn(i,j,nt_aero+3+4*(k-1),n))) &
-                                   * rside(i,j) / dt
-               enddo
-            enddo
-         endif
+     !-----------------------------------------------------------------                                            
+     ! Increment fluxes and melt the ice using rside as per 
+     ! existing routine
+     !-----------------------------------------------------------------                                            
+     do n = 1, ncat
 
-      enddo  ! n
+        !DIR$ CONCURRENT !Cray
+        !cdir nodep      !NEC
+        !ocl novrec      !Fujitsu
+                 do ij = 1, icells
+                    i = indxi(ij)
+                    j = indxj(ij)
 
-      end subroutine lateral_melt
+                    ! fluxes to coupler
+                    ! dfresh > 0, dfsalt > 0, dfpond > 0
+
+                    dfresh = (rhos*vsnon(i,j,n) + rhoi*vicen(i,j,n)) &
+                           * rside_itd(i,j,n) / dt
+                    dfsalt = rhoi*vicen(i,j,n)*ice_ref_salinity*p001 &
+                           * rside_itd(i,j,n) / dt
+                    fresh(i,j)      = fresh(i,j)      + dfresh
+                    fsalt(i,j)      = fsalt(i,j)      + dfsalt
+
+                    if (tr_pond_topo) then
+                       dfpond = aicen(i,j,n) &
+                              * trcrn(i,j,nt_apnd,n) & 
+                              * trcrn(i,j,nt_hpnd,n) &
+                              * rside_itd(i,j,n)
+                       fpond(i,j) = fpond(i,j) - dfpond
+                    endif
+
+                    ! history diagnostics
+                    meltl(i,j) = meltl(i,j) + vicen(i,j,n)*rside_itd(i,j,n)
+
+                    ! state variables
+                    vicen_init(i,j) = vicen(i,j,n)
+                    aicen(i,j,n) = aicen(i,j,n) * (c1 - rside_itd(i,j,n))
+                    vicen(i,j,n) = vicen(i,j,n) * (c1 - rside_itd(i,j,n))
+                    vsnon(i,j,n) = vsnon(i,j,n) * (c1 - rside_itd(i,j,n))
+
+ 
+                    !-----------------------------------------------------------------  
+                    ! Now compute the change to the mFSTD
+                    !-----------------------------------------------------------------                                            
+                    ! FSD
+                    if (tr_fsd) then
+                    if (rside_itd(i,j,n).gt.puny) then
+                    if (aicen(i,j,n).gt.puny) then
+
+                        fin_diff(:) = c0
+                        f_flx(:) = c0
+                        do k=  2, nfsd
+                                f_flx(k) =  G_radial(i,j) * &
+                                            areal_mfstd_init(i,j,k,n)/ &
+                                            floe_binwidth(k)
+ 
+                        end do
+
+                        do k = 1, nfsd
+                                fin_diff(k) = f_flx(k+1) - f_flx(k)
+                        end do
+
+                        if (ABS(SUM(fin_diff(:))).gt.puny) stop &
+                                 'sum fnk diff not zero in lm'
+
+                        do k = 1,nfsd
+                                areal_mfstd_final(k) = &
+                                areal_mfstd_init(i,j,k,n) +   &
+                                dt * (  - fin_diff(k) + &
+                                c2 * G_radial(i,j) * areal_mfstd_init(i,j,k,n) * &
+                                (c1/floe_rad_c(k) - & 
+                                SUM(areal_mfstd_init(i,j,:,n)/floe_rad_c(:))) )
+                        end do
+                       
+ 
+                        if (ABS(SUM(areal_mfstd_final)-c1).gt.puny) then
+                                print *, SUM(fin_diff)
+                                print *, SUM(areal_mfstd_final)-c1
+                                stop &
+                                'mFSTD not normed, lm' 
+                        end if
+
+                        ! this fixes tiny (e-30) differences from 1
+                        areal_mfstd_final = areal_mfstd_final/SUM(areal_mfstd_final)
+
+                        if (ANY(areal_mfstd_final.lt.c0)) stop &
+                                'neg mFSTD, lm'
+
+                        trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n) = areal_mfstd_final
+                   else
+                        trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n) = c0
+                   end if !aicen>0
+                   end if ! rside>0, otherwise do nothing
+            
+                   ! remove?
+                    if (ANY(trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n).gt.c1+puny)) stop  &
+                        'mFSTD > 1 in lat melt'
+
+                    if ((aicen(i,j,n).ne.aicen(i,j,n)).or.(vicen(i,j,n).ne.vicen(i,j,n))) stop &
+                        'aicen or vicen NaN after update in latmelt'
+
+                   end if ! tr_fsd
+
+
+                 enddo                  ! ij
+
+                 do k = 1, nilyr
+        !DIR$ CONCURRENT !Cray
+        !cdir nodep      !NEC
+        !ocl novrec      !Fujitsu
+                    do ij = 1, icells
+                       i = indxi(ij)
+                       j = indxj(ij)
+
+                       ! enthalpy tracers do not change (e/v constant)
+                       ! heat flux to coupler for ice melt (dfhocn < 0)
+                       dfhocn = trcrn(i,j,nt_qice+k-1,n)*rside_itd(i,j,n) / dt &
+                              * vicen(i,j,n)/real(nilyr,kind=dbl_kind)
+                       fhocn(i,j)      = fhocn(i,j)      + dfhocn
+                    enddo               ! ij
+                 enddo                  ! nilyr
+
+                 do k = 1, nslyr
+        !DIR$ CONCURRENT !Cray
+        !cdir nodep      !NEC
+        !ocl novrec      !Fujitsu
+                    do ij = 1, icells
+                       i = indxi(ij)
+                       j = indxj(ij)
+
+                       ! heat flux to coupler for snow melt (dfhocn < 0)
+
+                       dfhocn = trcrn(i,j,nt_qsno+k-1,n)*rside_itd(i,j,n) / dt &
+                              * vsnon(i,j,n)/real(nslyr,kind=dbl_kind)
+                       fhocn(i,j)      = fhocn(i,j)      + dfhocn
+                    enddo               ! ij
+                 enddo                  ! nslyr
+
+                 if (tr_aero) then
+                    do k = 1, n_aero
+        !DIR$ CONCURRENT !Cray
+        !cdir nodep      !NEC
+        !ocl novrec      !Fujitsu
+                       do ij = 1, icells
+                          i = indxi(ij)
+                          j = indxj(ij)
+                          faero_ocn(i,j,k) = faero_ocn(i,j,k) + (vsnon(i,j,n) &
+                                           *(trcrn(i,j,nt_aero  +4*(k-1),n)   &
+                                           + trcrn(i,j,nt_aero+1+4*(k-1),n))  &
+                                                              +  vicen(i,j,n) &
+                                           *(trcrn(i,j,nt_aero+2+4*(k-1),n)   &
+                                           + trcrn(i,j,nt_aero+3+4*(k-1),n))) &
+                                           * rside_itd(i,j,n) / dt
+                       enddo
+                    enddo
+                 endif
+
+              enddo  ! n
+
+                    end subroutine lateral_melt
+
 
 !=======================================================================
 !

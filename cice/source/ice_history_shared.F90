@@ -224,12 +224,9 @@
            f_wavespectrum    = 'm',                          &
            f_wave_hs_ice     = 'm', f_hm              = 'm', & 
            f_areal_fsd       = 'm', f_areal_fstd      = 'm', &
-           f_areal_mfstd_tilda  = 'm', &
            f_dafsdani        = 'm', f_dafsdlatm       = 'm', &  
            f_dafsdwave       = 'm', f_dafsdmrg        = 'm', &
-           f_dafsdlatg       = 'm', f_damfstdani      = 'm', &
-           f_damfstdlatm     = 'm', f_damfstdwave     = 'm', &
-           f_damfstdmrg      = 'm', f_damfstdlatg     = 'm', &
+           f_dafsdlatg       = 'm', &
            f_danani          = 'm', f_danlatm         = 'm', &  
            f_danlatg         = 'm', &
 ! LR
@@ -327,12 +324,9 @@
            f_wavespectrum,                              &
            f_wave_hs_ice,       f_hm,                   &
            f_areal_fsd,         f_areal_fstd,           &
-           f_areal_mfstd_tilda,                         &
            f_dafsdani,          f_dafsdlatm,            &
            f_dafsdwave,         f_dafsdmrg,             &
-           f_dafsdlatg,         f_damfstdlatg,          &
-           f_damfstdani,        f_damfstdlatm,          &
-           f_damfstdwave,       f_damfstdmrg,           &
+           f_dafsdlatg,                                 &
            f_danani,            f_danlatm,              &
            f_danlatg,              &
 ! LR
@@ -448,12 +442,9 @@
            n_wavespectrum,                                &
            n_wave_hs_ice        , n_hm                  , &
            n_areal_fsd          , n_areal_fstd          , & 
-           n_areal_mfstd_tilda  , &
            n_dafsdani           , n_dafsdlatm           , &
            n_dafsdwave          , n_dafsdmrg            , &
-           n_dafsdlatg          , n_damfstdlatg         , &
-           n_damfstdani         , n_damfstdlatm         , &
-           n_damfstdwave        , n_damfstdmrg          , &
+           n_dafsdlatg                                  , &
            n_danani             , n_danlatm             , &
            n_danlatg             , &
 ! LR    

@@ -595,6 +595,16 @@
       end subroutine init_thermo_vertical
 
 !=======================================================================
+! Modified from frzmlt_bottom_lateral 
+! rside becomes a function of itd ncat because 
+! floes are not assumed to be same size
+! in fact rside is also a function of nfsd but 
+! I sum it over the fsd here to get rside_itd
+! that can later be used to melt apply to aicen, vicen, etc
+! remember that the heat to the ocean is going to come out of variable ?
+! in lateral_melt
+! a lot of the work here is to simply ensure that no more ice 
+! melts than is available
 !
 ! Compute heat flux to bottom surface.
 ! Compute fraction of ice that melts laterally.
@@ -602,20 +612,28 @@
 ! authors C. M. Bitz, UW
 !         William H. Lipscomb, LANL
 !         Elizabeth C. Hunke, LANL
+!         
+! 2016: Lettie Roach modified slightly to allow fside and fbot to be 
+!       diagnostic output
 
       subroutine frzmlt_bottom_lateral (nx_block, ny_block, &
                                         ilo, ihi, jlo, jhi, &
                                         ntrcr,    dt,       &
-                                        aice,     frzmlt,   &
+                                        aice,     aicen,    & 
+                                        lead_area,          &
+                                        frzmlt,             &
                                         vicen,    vsnon,    &
                                         trcrn,              &
                                         sst,      Tf,       &
                                         strocnxT, strocnyT, &
                                         Tbot,     fbot,     &
-! LR
-                                        fside,              &
-! LR
-                                        rside,    Cdn_ocn)
+                                        fside,    rside,    &
+                                        Cdn_ocn    )
+
+       use ice_domain_size, only: ncat,nfsd,nilyr,nslyr
+       use ice_constants, only: c1
+       use ice_state, only: nt_qice, nt_qsno, nt_fsd, tr_fsd
+       use ice_fsd, only: floe_rad_c, floe_binwidth
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -626,6 +644,7 @@
          dt                  ! time step
 
       real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) :: &
+         lead_area,& ! area near ice
          aice    , & ! ice concentration
          frzmlt  , & ! freezing/melting potential (W/m^2)
          sst     , & ! sea surface temperature (C)
@@ -636,10 +655,11 @@
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,ncat), &
          intent(in) :: &
+         aicen   , & ! ITD
          vicen   , & ! ice volume (m)
          vsnon       ! snow volume (m)
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,ntrcr,ncat), &
+      real (kind=dbl_kind), dimension(nx_block,ny_block,ntrcr,ncat), &   ! needs to be ntrcr here to match call
          intent(in) :: &
          trcrn       ! tracer array
 
@@ -647,12 +667,17 @@
          intent(out) :: &
          Tbot    , & ! ice bottom surface temperature (deg C)
          fbot    , & ! heat flux to ice bottom  (W/m^2)
-! LR
-         fside   , & ! heat flux to ice side  (W/m^2)
-! LR
-         rside       ! fraction of ice that melts laterally
+         rside   , & ! fraction of ice that melts laterally
+         fside       ! lateral heat flux (W/m^2) !LR
 
       ! local variables
+! LR made this a local variable
+      real (kind=dbl_kind), dimension(nx_block,ny_block,ncat) :: &
+        rside_itd       ! fraction of ice that melts laterally
+
+      real (kind=dbl_kind), dimension(ncat) :: &
+        delta_an       ! amount of ice that melts laterally
+! LR
 
       integer (kind=int_kind) :: &
          i, j           , & ! horizontal indices
@@ -666,12 +691,17 @@
 
       real (kind=dbl_kind), dimension (:), allocatable :: &
          etot        ! total energy in column
-         ! LR - fside no longer allocatable as needed as output
+! LR         fside       ! lateral heat flux (W/m^2)
+
 
       real (kind=dbl_kind) :: &
+! LR
+        smfloe_arealoss, & ! change in area due to floes melting out of the
+                         ! smallest floe size category
+        G_radial   , & ! lateral melt rate, equal to negative wlat
+! LR
          deltaT    , & ! SST - Tbot >= 0
          ustar     , & ! skin friction velocity for fbot (m/s)
-         wlat      , & ! lateral melt rate (m/s)
          xtmp          ! temporary variable
 
       ! Parameters for bottom melting
@@ -689,16 +719,17 @@
          m2 = 1.36_dbl_kind           ! constant from Maykut & Perovich
                                       ! (unitless)
 
-      do j = 1, ny_block
-      do i = 1, nx_block
-         rside(i,j) = c0
-         Tbot (i,j) = Tf(i,j)
-         fbot (i,j) = c0
-! LR
-         fside (i,j) = c0
-! LR
-      enddo
-      enddo
+      real (kind=dbl_kind), dimension(nx_block,ny_block) :: &
+         wlat        ! lateral melt rate (m/s)
+
+
+      ! LR fbot and fside will be zero if aice<puny or frzmlt < 0
+
+
+      Tbot = Tf
+      fbot = c0
+      fside = c0 ! LR
+      rside_itd = c0
 
       !-----------------------------------------------------------------
       ! Identify grid cells where ice can melt.
@@ -752,11 +783,57 @@
       ! Compute rside.  See these references:
       !    Maykut and Perovich (1987): JGR, 92, 7032-7044
       !    Steele (1992): JGR, 97, 17,729-17,738
+      !    Hovart and Tziperman (2015): TC ?
       !-----------------------------------------------------------------
 
-         wlat = m1 * deltaT**m2 ! Maykut & Perovich
-         rside(i,j) = wlat*dt*pi/(floeshape*floediam) ! Steele
-         rside(i,j) = max(c0,min(rside(i,j),c1))
+        wlat(i,j) = m1 * deltaT**m2 ! Maykut & Perovich
+
+
+        if (.NOT.tr_fsd) then ! assuming all floes are 300 m, compute rside
+
+            rside(i,j) = wlat(i,j)*dt*pi/(floeshape*floediam) ! Steele
+            rside(i,j) = max(c0,min(rside(i,j),c1))
+
+            ! for consistency below
+            rside_itd(i,j,:) = rside(i,j)
+
+        else
+
+            ! choose that this equals -Gr in Hovart
+            G_radial = - wlat(i,j)
+
+            ! LR - Compute rside but only to compute the lateral heat flux, fside
+            ! The ITD and mFSTD are only actually evolved in ice_fsd_thermo,
+            ! lateral_melt_fsdtherm subroutine
+            ! We need to compute fside and not just wlat, because fside may
+            ! be reduced so that fside + bottom < frzmlt
+            rside_itd(i,j,:) = 0
+            do n = 1, ncat
+                       
+                smfloe_arealoss = - trcrn(i,j,nt_fsd+1-1,n) / floe_binwidth(1) * &
+                                dt * G_radial * aicen(i,j,n)
+                
+                delta_an(n)=c0
+                do k=1,nfsd
+                        ! delta_an is negative
+                        delta_an(n) = delta_an(n) + ((c2/floe_rad_c(k))*aicen(i,j,n)* &
+                                               trcrn(i,j,nt_fsd+k-1,n)*G_radial*dt) 
+                end do                                                 
+          
+                ! add negative area loss from fsd
+                delta_an(n) = delta_an(n) - smfloe_arealoss
+
+                if(delta_an(n).gt.c0) stop 'delta_an gt0'
+
+                ! to give same definition as in orginal code
+                if (aicen(i,j,n).gt.c0) rside_itd(i,j,n)=-delta_an(n)/aicen(i,j,n) 
+                ! otherwise rside_itd remains zero
+
+                if (rside_itd(i,j,n).lt.c0) stop 'rside lt0'
+
+            enddo ! n
+
+        end if ! tr_fsd
 
       enddo                     ! ij
 
@@ -803,7 +880,9 @@
             i = indxi(ij)
             j = indxj(ij)
             ! lateral heat flux
-            fside(i,j) = fside(i,j) + rside(i,j)*etot(ij)/dt ! fside < 0
+	        ! CMB note rside is unique for each itd category when computed
+            ! from the FSTD, otherwise always the same
+            fside(i,j) = fside(i,j) + rside_itd(i,j,n)*etot(ij)/dt ! fside < 0
          enddo                  ! ij
 
       enddo                     ! n
