@@ -201,10 +201,9 @@
       use ice_therm_vertical, only: frzmlt_bottom_lateral, thermo_vertical
       use ice_timers, only: ice_timer_start, ice_timer_stop, timer_ponds
 ! LR CMB liuxy
-      use ice_flux, only: fbottom, flateral, lead_area, latsurf_area
+      use ice_flux, only: fbottom, flateral
       use ice_domain_size, only: nfsd
-      use ice_fsd, only: renorm_mfstd, partition_area
-      use ice_flux, only: rside_itd
+      use ice_fsd, only: renorm_mfstd
 ! LR CMB liuxy
 
 
@@ -327,35 +326,20 @@
       ! LR: various options for fsd thermodynamics
       !-----------------------------------------------------------------
 ! LR                      
-        if (tr_fsd) then
+        if (tr_fsd) &
               ! renormalize areal mFSTD (should already be normalized by
               ! time evolution equations, but other changes eg. transport
               ! may result in it being not quite normalized) 
+              ! not needed here any more as no longer use FSD in step therm1!
               call renorm_mfstd (nx_block, ny_block,ncat,nfsd,aicen(:,:,:,iblk), &
                                trcrn(:,:,:,:,iblk))
-
-              ! calculate various areas required to partition fluxes
-              call partition_area (nx_block, ny_block,                &
-                                        ilo, ihi, jlo, jhi,             &
-                                        ntrcr,                          &
-                                        aice(:,:,iblk),                 &
-                                        aicen(:,:,:,iblk),              &
-                                        vicen(:,:,:,iblk),              &
-                                        trcrn(:,:,1:ntrcr,:,iblk),      &
-                                        lead_area(:,:,iblk),            &
-                                        latsurf_area(:,:,iblk)          )
-
-
-        end if
 
         ! calculate heat fluxes (does not change ice)
         call frzmlt_bottom_lateral                               &
                         (nx_block,           ny_block,           &
                          ilo, ihi,           jlo, jhi,           &
                          ntrcr,              dt,                 &
-                         aice  (:,:,  iblk), aicen(:,:,:,iblk),  &
-                         lead_area(:,:,iblk),                    &
-                         frzmlt(:,:,  iblk),                     &
+                         aice  (:,:,  iblk), frzmlt(:,:,  iblk), &
                          vicen (:,:,:,iblk), vsnon (:,:,:,iblk), &
                          trcrn (:,:,1:ntrcr,:,iblk),             &
                          sst   (:,:,  iblk), Tf    (:,:,  iblk), &
@@ -798,7 +782,7 @@
                           lead_area, latsurf_area, vlateral, &
                           sst, Tf, &
                           G_radial, wave_spectrum, wave_hs_in_ice                
-      use ice_fsd_thermo, only: add_new_ice_lat
+       use ice_fsd_thermo, only: add_new_ice_lat
        use ice_fsd, only:renorm_mfstd, &
                          partition_area, &
                          floe_merge_thermo, &
