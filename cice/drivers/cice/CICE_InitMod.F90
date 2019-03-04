@@ -67,7 +67,7 @@
       use ice_forcing, only: init_forcing_ocn, init_forcing_atmo, &
           get_forcing_atmo, get_forcing_ocn, &
 ! LR
-          get_forcing_wave, get_wave_spec
+          get_wave_spec
 ! LR
       use ice_grid, only: init_grid1, init_grid2
       use ice_history, only: init_hist, accum_hist
@@ -80,7 +80,7 @@
       use ice_state, only: tr_aero
       use ice_therm_vertical, only: init_thermo_vertical
       use ice_timers, only: timer_total, init_ice_timers, ice_timer_start, &
-                            timer_initwaves, ice_timer_stop ! LR
+                            ice_timer_stop ! LR
       use ice_transport_driver, only: init_transport
       use ice_zbgc, only: init_zbgc
       use ice_zbgc_shared, only: skl_bgc
@@ -90,7 +90,6 @@
 ! LR CMB
       use ice_state, only: tr_fsd
       use ice_fsd, only: init_fsd_bounds    !CMB
-      use ice_wavebreaking!, only: init_wave ! LR
       use ice_wavefracspec, only: wave_spec
       use ice_communicate, only: my_task, master_task !LR
       use ice_domain_size, only: max_blocks
@@ -126,15 +125,6 @@
 
 ! LR CMB
         if (tr_fsd) call init_fsd_bounds      ! initialize floe size distribution bounds CMB
-
-        ! Calculate the floe size distribution created and lost as a result of
-        ! ocean surface wave fracture for all combinations of discrete properties
-        ! OR read this in from text files, and save for later use
-        call ice_timer_start(timer_initwaves)
-
-        if (tr_fsd.and.(.NOT.wave_spec)) call init_wave 
-
-        call ice_timer_stop(timer_initwaves)
 ! LR CMB
                                  
       call calendar(time)       ! determine the initial date
@@ -168,16 +158,7 @@
       call init_forcing_atmo    ! initialize atmospheric forcing (standalone)
 
 ! LR
-      if (tr_fsd) then
-          if (wave_spec) then
-              call get_wave_spec ! read in wave spectrum in ice
-          else
-              call get_forcing_wave ! wave forcing from data outside ice
-              ! need to allocate wave_spectrum as it doesn't exist yet
-              ! and needs to be passed to add_new_ice_lat
-              allocate(wave_spectrum(1,1,1,max_blocks))
-          end if
-      end if
+      if (tr_fsd.and.wave_spec) call get_wave_spec ! read in wave spectrum in ice
 ! LR
 
 #ifndef coupled

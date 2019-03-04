@@ -6,7 +6,6 @@
 
       use ice_kinds_mod
       use ice_constants
-      use ice_wavebreaking, only: get_fraclengths
       use ice_domain_size, only: nfsd, ncat, max_ntrcr, max_blocks
  
       implicit none
@@ -410,6 +409,166 @@
 
 
      end subroutine wave_frac
+
+!===========================================================================
+!  Given the (attenuated) sea surface height, find the strain across triplets
+!  of max, min, max or min, max, min (local extrema within 10m).
+!  If this strain is greater than the  critical strain, ice can fracture
+!  and new floes are formed with sizes equal to the distances between
+!  extrema
+!
+        subroutine get_fraclengths(X, eta, fraclengths, hbar, e_stop)
+
+        use ice_communicate, only: my_task
+
+        real (kind=dbl_kind) :: &
+                hbar
+
+        real (kind=dbl_kind), intent(in), dimension (nx) :: &
+                X, eta
+ 
+        real (kind=dbl_kind), intent(inout), dimension (:), allocatable :: &
+                fraclengths
+ 
+        logical (kind=log_kind), intent(inout) :: &
+                e_stop          ! if true, stop and return zero omega and fsdformed
+
+
+        ! local
+        integer (kind=int_kind) :: &
+                spcing, &       ! distance in dx over which to search for extrema on each side of point
+                j, k, &         ! indices to iterate over domain
+                first, last, &  ! indices over which to search for extrema
+                j_neg, &        ! nearest extrema backwards
+                j_pos, &        ! nearest extrema forwards
+                n_above         ! number of points where strain is above
+                                ! critical strain
+        
+
+         real (kind=dbl_kind), dimension(nx) :: &
+                strain, &        ! the strain between triplets of extrema
+                frac_size_one, & !
+                frac_size_two
+
+        logical (kind=log_kind), dimension(nx) :: &
+                is_max, is_min, &       ! arrays to hold whether each point is a local max or min
+                is_extremum, &          ! or extremum
+                is_triplet              ! or triplet of extrema
+
+         real (kind=dbl_kind) :: &
+                delta, &        ! difference in x between current and prev extrema
+                delta_pos       ! difference in x between next and current extrema
+
+       integer (kind=int_kind), dimension(1) :: &
+        maxj, minj  ! indices of local max and min
+
+
+       ! -------equivalent of peakfinder2
+       !given eta and spcing, compute extremelocs in ascending order
+       spcing=nint(threshold/dx)
+
+       is_max = .false.
+       is_min = .false.
+       is_extremum = .false.
+       is_triplet = .false.
+       strain = c0
+       frac_size_one = c0
+       frac_size_two = c0
+       j_neg = 0
+       j_pos = 0      
+ 
+       ! search for local max and min within spacing of
+       ! 10m on either side of each point
+
+       do j = 1, nx
+
+                first = MAX(1,j-spcing)
+                last = MIN(nx,j+spcing)
+
+
+                maxj = MAXLOC(eta(first:last))
+                minj = MINLOC(eta(first:last))
+
+                if (COUNT(eta(first:last).eq.MAXVAL(eta(first:last))).gt.1) &
+                        stop 'more than one max'
+                if (COUNT(eta(first:last).eq.MINVAL(eta(first:last))).gt.1) &
+                        stop 'more than one min'
+
+                if (maxj(1)+first-1.eq.j) is_max(j) = .true.
+                if (minj(1)+first-1.eq.j) is_min(j) = .true.
+
+                if (is_min(j).and.is_max(j)) then
+                         print *, 'X ',X
+                         print *, 'eta ',eta
+                         print *, 'frst last' ,first, last
+                         print *, 'maxj, minj ',maxj,minj
+                         stop &
+                        'error in extrema'
+                end if
+                if (is_min(j).or.is_max(j)) is_extremum(j) = .true.
+        end do
+
+        do j = 2, nx-1
+                if (is_extremum(j)) then
+                        if (j.eq.2) then
+                                if (is_extremum(1)) j_neg = 1
+                        else
+                            do k = j-1, 1, -1
+                                if (is_extremum(k)) then
+                                        j_neg = k
+                                        EXIT
+                                end if
+                             end do
+                        end if
+                       
+                        do k = j+1, nx
+                                if (is_extremum(k)) then
+                                        j_pos = k
+                                        EXIT
+                                end if
+                        end do
+                       
+                        if ((j_neg.gt.0).and.(j_pos.gt.0)) then 
+                            if (is_max(j_neg).and.is_min(j).and.is_max(j_pos)) &
+                                is_triplet(j) = .true.
+                            if (is_min(j_neg).and.is_max(j).and.is_min(j_pos)) &
+                                is_triplet(j) = .true.
+                        end if
+
+                        ! calculate strain
+                        if (is_triplet(j)) then
+                                delta_pos = X(j_pos) - X(j)
+                                delta = X(j) - X(j_neg)
+                                strain(j) = (hbar/c2) *(eta(j_neg)*delta_pos - &
+                                        eta(j)*(delta_pos+delta) + eta(j)*delta ) &
+                                        /(delta*delta_pos*(delta+delta_pos))
+
+
+                                if (strain(j).gt.straincrit) then
+                                        frac_size_one(j) = X(j_pos) - X(j)
+                                        frac_size_two(j) = X(j) - X(j_neg)
+                                end if
+                        end if
+
+                end if
+
+        end do
+
+        n_above = COUNT(strain.gt.straincrit)
+        if (n_above.gt.0) then
+                DEALLOCATE(fraclengths)
+                ALLOCATE(fraclengths(2*n_above))
+                fraclengths(1:n_above) = PACK(frac_size_one,(frac_size_one.gt.c0))
+                fraclengths(n_above+1:2*n_above) = &
+                        PACK(frac_size_two,(frac_size_two.gt.c0))
+
+                e_stop = .false.
+        else
+                e_stop = .true.
+
+        end if
+
+        end subroutine get_fraclengths
 
 
 

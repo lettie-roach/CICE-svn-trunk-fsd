@@ -814,8 +814,7 @@
 ! LR CMB
       use ice_flux, only: rside_itd, flateral, &
                           lead_area, latsurf_area, vlateral, &
-                          nearest_wave_hs, nearest_wave_tz, &
-                          cml_nfloes, sst, Tf, &
+                          sst, Tf, &
                           G_radial, wave_spectrum, wave_hs_in_ice                
       use ice_fsd_thermo, only: lateral_melt_fsdtherm, &
                                 partition_area, &

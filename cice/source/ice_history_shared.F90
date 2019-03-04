@@ -222,13 +222,7 @@
            f_concforww       = 'm', f_diamforww       = 'm', &
            f_thickforww      = 'm'                         , &
            f_wavespectrum    = 'm',                          &
-           f_wave_hs         = 'm', f_wave_tz         = 'm', &
-           f_wave_hs_ice     = 'm', f_nearest_wave_hs = 'm', &
-           f_nearest_wave_tz = 'm'                         , &
-           f_wave_search_i   = 'm', f_wave_search_j   = 'm', &
-           f_ice_search_i    = 'm', f_ice_search_j    = 'm', &
-           f_cml_nfloes      = 'm', f_nfloes          = 'm', &
-           f_hm              = 'm',& 
+           f_wave_hs_ice     = 'm', f_hm              = 'm', & 
            f_areal_fsd       = 'm', f_areal_fstd      = 'm', &
            f_areal_mfstd_tilda  = 'm', &
            f_dafsdani        = 'm', f_dafsdlatm       = 'm', &  
@@ -331,13 +325,7 @@
            f_concforww,         f_diamforww,            &
            f_thickforww,                                &
            f_wavespectrum,                              &
-           f_wave_hs,           f_wave_tz,              & 
-           f_wave_hs_ice,       f_nearest_wave_hs,      &
-           f_nearest_wave_tz,                           &
-           f_wave_search_i,     f_wave_search_j,        &
-           f_ice_search_i,      f_ice_search_j,         &
-           f_cml_nfloes,        f_nfloes,               &
-           f_hm,                                        &
+           f_wave_hs_ice,       f_hm,                   &
            f_areal_fsd,         f_areal_fstd,           &
            f_areal_mfstd_tilda,                         &
            f_dafsdani,          f_dafsdlatm,            &
@@ -458,13 +446,7 @@
            n_concforww          , n_diamforww           , &
            n_thickforww                                 , &
            n_wavespectrum,                                &
-           n_wave_hs            , n_wave_tz             , &
-           n_wave_hs_ice        , n_nearest_wave_hs     , &
-           n_nearest_wave_tz                            , &
-           n_wave_search_i      , n_wave_search_j       , &
-           n_ice_search_i       , n_ice_search_j        , &
-           n_cml_nfloes         , n_nfloes              , &
-           n_hm,                                          &
+           n_wave_hs_ice        , n_hm                  , &
            n_areal_fsd          , n_areal_fstd          , & 
            n_areal_mfstd_tilda  , &
            n_dafsdani           , n_dafsdlatm           , &

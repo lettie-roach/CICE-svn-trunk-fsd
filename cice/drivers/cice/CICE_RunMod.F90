@@ -41,7 +41,7 @@
       use ice_calendar, only: istep, istep1, time, dt, stop_now, calendar
       use ice_forcing, only: get_forcing_atmo, get_forcing_ocn, &
 ! LR
-                        get_forcing_wave, get_wave_spec
+                        get_wave_spec
       use ice_state, only: tr_fsd
       use ice_wavefracspec, only: wave_spec
 ! LR
@@ -71,13 +71,7 @@
       timeLoop: do
 #endif
 ! LR
-         if (tr_fsd) then
-             if (wave_spec) then 
-                call get_wave_spec ! read in wave spectrum in ice
-             else
-                call get_forcing_wave ! wave forcing from data outside ice
-             end if
-         end if
+         if (tr_fsd.and.wave_spec) call get_wave_spec ! read in wave spectrum in ice
 ! LR
 
          call ice_step
@@ -164,7 +158,6 @@
 ! LR
       use ice_state, only: tr_fsd,trcrn, nt_qice, aicen
       use ice_fsd, only: write_restart_fsd 
-      use ice_wavebreaking, only: wave_break, find_wave
       use ice_wavefracspec, only: wave_spec,  wave_frac_fsd
       use ice_state, only: nt_fsd
       use ice_domain_size, only: ncat, nfsd 
@@ -191,14 +184,6 @@
          call init_history_bgc
          call ice_timer_stop(timer_diags)   ! diagnostics/history
 
-! LR
-        ! Find waves and reconstruct spectrum
-        call ice_timer_start(timer_waves)
-
-        if ((tr_fsd).and.(.NOT.wave_spec)) call find_wave
-
-        call ice_timer_stop(timer_waves)        
-! LR 
          call ice_timer_start(timer_column)  ! column physics
          call ice_timer_start(timer_thermo)  ! thermodynamics
 
@@ -236,13 +221,7 @@
         ! fracture 
         call ice_timer_start(timer_waves)
 
-        if (tr_fsd) then
-            if (wave_spec) then
-                call wave_frac_fsd
-            else
-                call wave_break
-            end if
-        end if
+        if (tr_fsd.and.wave_spec) call wave_frac_fsd
 
         call ice_timer_stop(timer_waves)        
 ! LR

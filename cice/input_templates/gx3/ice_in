@@ -4,7 +4,7 @@
   , year_init      = 1997
   , istep0         = 0
   , dt             = 3600.0
-  , npt            = 8930 
+  , npt            = 24 
   , ndtd           = 1
   , runtype        = 'initial'
   , ice_ic         = 'none'
@@ -179,9 +179,9 @@
   , restore_sst     = .false.
   , trestore        =  90
   , restore_ice     = .false.
-  , wave_forc_dir   = '/home/roachla/cice_standalone_5.1.2_maui/dummy_forcing_data/JRA55_Wave/'
-  , wave_forc_file  = 'gx3_ww3g_6h_jra55-wave-1997.nc'
-  , wave_fn_dir     =  '/home/roachla/cice_standalone_5.1.2_maui/dummy_forcing_data/wave_fns/'
+  , wave_spec_dir   = ''
+  , wave_spec_file  = ''
+  , wave_spec       = .true.
 /
 
 &icefields_nml
@@ -203,9 +203,7 @@
   , f_VGRDb        = .false.
   , f_bounds       = .false.
   , f_aice         = 'm' 
-  , f_wave_hs      = 'm'
   , f_wave_hs_ice  = 'm'
-  , f_wave_tz      = 'm'
   , f_areal_fsd    = 'm'
   , f_dafsdani     = 'm'
   , f_dafsdlatm    = 'm'

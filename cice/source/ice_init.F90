@@ -71,8 +71,7 @@
           sss_data_type,   sst_data_type, ocn_data_dir, &
           oceanmixed_file, restore_sst,   trestore, &
 ! LR
-          wave_forc_dir, wave_forc_file, wave_spec_dir, wave_spec_file
-      use ice_wavebreaking, only: wave_fn_dir, wave_fn_file, calc_wave
+          wave_spec_dir, wave_spec_file
       use ice_wavefracspec, only: wave_spec
 ! LR
       use ice_grid, only: grid_file, gridcpl_file, kmt_file, grid_type, grid_format
@@ -104,8 +103,7 @@
       use shr_file_mod, only: shr_file_setIO
 #endif
 ! CMB LR
-      use ice_fsd, only: restart_fsd, write_diag_wave, &
-                         c_mrg, rdc_frzmlt
+      use ice_fsd, only: restart_fsd, c_mrg, rdc_frzmlt
       use ice_fsd_thermo, only: new_ice_fs
       use ice_domain_size, only: nfsd
       use ice_state, only: tr_fsd, nt_fsd
@@ -140,8 +138,7 @@
         print_global,   print_points,   latpnt,          lonpnt,        &
         dbug,           histfreq,       histfreq_n,      hist_avg,      &
         history_dir,    history_file,                                   &
-        write_ic,       incond_dir,     incond_file,                    &
-        write_diag_wave               ! LR 
+        write_ic,       incond_dir,     incond_file 
 
       namelist /grid_nml/ &
         grid_format,    grid_type,       grid_file,     kmt_file,       &
@@ -183,8 +180,6 @@
         restore_ice,    formdrag,        highfreq,      natmiter,       &
         tfrz_option, &
 ! LR
-        wave_forc_dir,  wave_forc_file,  wave_fn_dir,                   &
-        wave_fn_file,   calc_wave,                                      &
         wave_spec,      wave_spec_dir,   wave_spec_file                 
 ! LR
 
@@ -270,8 +265,6 @@
       new_ice_fs = 0        ! option for floe size assigned to new ice growth
       rdc_frzmlt=.false.       ! partitioning of frzmlt (limit for melt)
       hfrazilmin=0.05_dbl_kind ! min thickness of new frazil ice (m)
-      write_diag_wave=.false. ! if .true., save lats/lons from find_wave to 
-                              ! history file 
 ! LR
       conduct = 'bubbly'     ! 'MU71' or 'bubbly' (Pringle et al 2007)
       calc_Tsfc = .true.     ! calculate surface temperature
@@ -326,13 +319,8 @@
       restore_ice     = .false.   ! restore ice state on grid edges if true
       dbug      = .false.         ! true writes diagnostics for input forcing
 ! LR
-      wave_forc_dir = ' ' 
-      wave_forc_file = ' '        ! eORCA1_ww3g_6h_jra55-wave_1979.nc OR gx3
       wave_spec_dir = ' '
       wave_spec_file = ' '
-      wave_fn_dir   = ' '
-      wave_fn_file = ' '
-      calc_wave     = .false.     ! create lookup table for wave fracture 
       wave_spec     = .false.     ! wave spectrum in ice is available for each gridcell
 ! LR
       latpnt(1) =  90._dbl_kind   ! latitude of diagnostic point 1 (deg)
@@ -748,7 +736,6 @@
       call broadcast_scalar(new_ice_fs,         master_task)
       call broadcast_scalar(rdc_frzmlt,         master_task)
       call broadcast_scalar(hfrazilmin,         master_task)
-      call broadcast_scalar(write_diag_wave,    master_task)
 ! LR
       call broadcast_scalar(conduct,            master_task)
       call broadcast_scalar(R_ice,              master_task)
@@ -798,13 +785,8 @@
       call broadcast_scalar(restore_ice,        master_task)
       call broadcast_scalar(dbug,               master_task)
 ! LR
-      call broadcast_scalar(wave_forc_dir,      master_task)
-      call broadcast_scalar(wave_forc_file,     master_task) 
       call broadcast_scalar(wave_spec_dir,      master_task)
       call broadcast_scalar(wave_spec_file,     master_task)
-      call broadcast_scalar(wave_fn_dir,        master_task)
-      call broadcast_scalar(wave_fn_file,        master_task)
-      call broadcast_scalar(calc_wave,          master_task)
       call broadcast_scalar(wave_spec,          master_task)
 ! LR
       call broadcast_array (latpnt(1:2),        master_task)
@@ -984,7 +966,6 @@
 
          write(nu_diag,1010) ' rdc_frzmlt                  = ', rdc_frzmlt
          write(nu_diag,1005) ' hfrazilmin                  = ', hfrazilmin
-         write(nu_diag,1020) ' write_diag_wave             = ', write_diag_wave
 ! LR         
          write(nu_diag,1030) ' atmbndy                   = ', &
                                trim(atmbndy)

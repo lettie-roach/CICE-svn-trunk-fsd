@@ -81,7 +81,6 @@
 ! LR liuxy
       use ice_state, only: tr_fsd ! LR
       use ice_domain_size, only: nfsd ! liuxy
-      use ice_fsd, only: write_diag_wave 
       use ice_wavefracspec, only: wave_spec
  
       integer (kind=int_kind) :: k !liuxy
@@ -177,50 +176,21 @@
         f_leadarea  = 'x'
         f_latsurfarea = 'x'
         f_vlateral = 'x'
-        f_nearest_wave_hs = 'x'
-        f_nearest_wave_tz = 'x'
-        f_cml_nfloes = 'x'
         f_hm = 'x'
-        f_nfloes = 'x'
         f_concforww = 'x'
         f_diamforww = 'x'
         f_thickforww = 'x'
         f_wavespectrum='x'
-        f_wave_hs = 'x'
-        f_wave_tz = 'x'
         f_wave_hs_ice = 'x'
-        f_wave_search_i = 'x'
-        f_wave_search_j = 'x'
-        f_ice_search_i = 'x'
-        f_ice_search_j = 'x'
-      end if 
+     end if 
 
-      if (wave_spec) then
-        f_wavespectrum=''
-        f_wave_hs = 'x'
-        f_wave_tz = 'x'
-        f_wave_search_i = 'x'
-        f_wave_search_j = 'x'
-        f_ice_search_i = 'x'
-        f_ice_search_j = 'x'
-        f_nearest_wave_hs = 'x'
-        f_nearest_wave_tz = 'x'
-        f_cml_nfloes = 'x'
-        f_nfloes = 'x'
-      else
+      if (.NOT.wave_spec) then
+          ! LR maybe some more to add here
         f_concforww = 'x'
         f_diamforww = 'x'
         f_wavespectrum='x'
         f_thickforww = 'x'        
       end if   
-
-      if (.not. write_diag_wave) then
-        f_wave_search_i = 'x'
-        f_wave_search_j = 'x'
-        f_ice_search_i = 'x'
-        f_ice_search_j = 'x'
-      end if
-
 ! LR 
       if (kdyn /= 2) then
            f_a11       = 'x'
@@ -288,18 +258,8 @@
       call broadcast_scalar (f_diamforww, master_task)
       call broadcast_scalar (f_thickforww, master_task)
       call broadcast_scalar (f_wavespectrum, master_task)
-      call broadcast_scalar (f_wave_hs, master_task)
-      call broadcast_scalar (f_wave_tz, master_task)
       call broadcast_scalar (f_wave_hs_ice, master_task)
-      call broadcast_scalar (f_nearest_wave_hs, master_task)
-      call broadcast_scalar (f_nearest_wave_tz, master_task)      
-      call broadcast_scalar (f_cml_nfloes, master_task)
       call broadcast_scalar (f_hm, master_task)
-      call broadcast_scalar (f_nfloes, master_task)
-      call broadcast_scalar (f_wave_search_i, master_task)
-      call broadcast_scalar (f_wave_search_j, master_task)
-      call broadcast_scalar (f_ice_search_i, master_task)
-      call broadcast_scalar (f_ice_search_j, master_task)
       call broadcast_scalar (f_areal_fsd, master_task)
       call broadcast_scalar (f_areal_fstd, master_task)
       call broadcast_scalar (f_areal_mfstd_tilda, master_task)
@@ -490,36 +450,11 @@
              "defined as per Horvat & Tziperman (2015)", c1, c0,         &
              ns1, f_latsurfarea)
 
-         call define_hist_field(n_wave_hs,"wave_hs","m",tstr2D, tcstr, &
-             "significant height of wind and swell waves",  &
-             "from wave forcing", c1, c0,         &
-             ns1, f_wave_hs)
-        
-         call define_hist_field(n_wave_tz,"wave_tz","s",tstr2D, tcstr, &
-             "second moment mean wave period",                  &
-             "from wave forcing", c1, c0,         &
-             ns1, f_wave_tz)
-
          call define_hist_field(n_wave_hs_ice,"wave_hs_ice","m",tstr2D, tcstr, &
              "significant height of wind and swell waves",  &
              "from attenuated spectrum in ice", c1, c0,         &
              ns1, f_wave_hs_ice)
  
-        call define_hist_field(n_nearest_wave_hs,"nearest_wave_hs","m",tstr2D, tcstr, &
-         "nearest significant height of wind and swell waves",&
-             "from nearest wave", c1, c0,         &
-             ns1, f_nearest_wave_hs)
-        
-         call define_hist_field(n_nearest_wave_tz,"nearest_wave_tz","s",tstr2D, tcstr, &
-             "nearest second moment mean wave period",     &
-             "from nearest wave", c1, c0,         &
-             ns1, f_nearest_wave_tz)
-
-         call define_hist_field(n_cml_nfloes,"cml_nfloes","1",tstr2D, tcstr, &
-             "avg. no floes to nearest wave",                  &
-             " ", c1, c0,         &
-             ns1, f_cml_nfloes)
-
          call define_hist_field(n_hm,"land_mask","1",tstr2D, tcstr, &
              "land mask",                  &
              " ", c1, c0,         &
@@ -539,32 +474,6 @@
              "Thickness of floes > Dmin",                  &
              " ", c1, c0,         &
              ns1, f_thickforww)
-
-         call define_hist_field(n_nfloes,"nfloes","1",tstr2D, tcstr, &
-             "avg. no floes in grid cell",                  &
-             " ", c1, c0,         &
-             ns1, f_nfloes)
-
-        call define_hist_field(n_wave_search_i,"wave_search_i","deg",tstr2D, tcstr, &
-             "global i index of nearest wave (snapshot)",                  &
-             " ", c1, c0,         &
-             ns1, f_wave_search_i)
-
-         call define_hist_field(n_wave_search_j,"wave_search_j","deg",tstr2D, tcstr, &
-             "global j index of nearest wave (snapshot)",                  &
-             " ", c1, c0,         &
-             ns1, f_wave_search_j)
-
-         call define_hist_field(n_ice_search_i,"ice_search_i","deg",tstr2D, tcstr, &
-             "global i index of ice (snapshot)",                  &
-             " ", c1, c0,         &
-             ns1, f_ice_search_i)
-
-         call define_hist_field(n_ice_search_j,"ice_search_j","deg",tstr2D, tcstr, &
-             "global j index of ice (snapshot)",                  &
-             " ", c1, c0,         &
-             ns1, f_ice_search_j)
-
 
 ! LR
          call define_hist_field(n_hi,"hi","m",tstr2D, tcstr,        & 
@@ -1524,12 +1433,8 @@
       use ice_zbgc_shared, only: skl_bgc
 !  LR CMB
       use ice_flux, only: flateral, fbottom, latsurf_area, lead_area, &
-                          wave_hs, wave_tz, wave_hs_in_ice, vlateral, &
-                          cml_nfloes, nearest_wave_hs, nearest_wave_tz, &
-                          wave_search_i, wave_search_j, &
-                          ice_search_i, ice_search_j, &
+                          wave_hs_in_ice, vlateral, &
                           G_radial, wave_spectrum
-      use ice_wavebreaking, only: nfl
       use ice_fsd
       use ice_grid, only: hm
       use ice_domain_size, only: nfsd    !CMB
@@ -1673,22 +1578,14 @@
              call accum_hist_field(n_leadarea, iblk, lead_area(:,:,iblk), a2D)
          if (f_latsurfarea (1:1) /= 'x') &
              call accum_hist_field(n_latsurfarea,iblk,latsurf_area(:,:,iblk), a2D)
-         if (f_wave_hs (1:1) /= 'x') &
-             call accum_hist_field(n_wave_hs,iblk,wave_hs(:,:,iblk), a2D)
-         if (f_wave_tz (1:1) /= 'x') &
-             call accum_hist_field(n_wave_tz,iblk,wave_tz(:,:,iblk), a2D)
-         if (f_wave_hs_ice(1:1) /= 'x') &
+        if (f_wave_hs_ice(1:1) /= 'x') &
              call accum_hist_field(n_wave_hs_ice,iblk,wave_hs_in_ice(:,:,iblk), a2D)
 !         if (f_nearest_wave_hs (1:1) /= 'x') &
 !             call accum_hist_field(n_nearest_wave_hs,iblk,nearest_wave_hs(:,:,iblk), a2D)
 !         if (f_nearest_wave_tz (1:1) /= 'x') &
 !             call accum_hist_field(n_nearest_wave_tz,iblk,nearest_wave_tz(:,:,iblk), a2D)
-         if (f_cml_nfloes (1:1) /= 'x') &
-             call accum_hist_field(n_cml_nfloes,iblk,cml_nfloes(:,:,iblk), a2D)
          if (f_hm (1:1) /= 'x') &
              call accum_hist_field(n_hm,iblk,hm(:,:,iblk), a2D)
-         if (f_nfloes (1:1) /= 'x') &
-             call accum_hist_field(n_nfloes,iblk,nfl(:,:,iblk), a2D)
 
          if (f_concforww (1:1) /= 'x') then
              do j = jlo, jhi
@@ -2502,14 +2399,6 @@
                  if (n_yieldstress12 (ns) /= 0) a2D(i,j,n_yieldstress12(ns),iblk) = spval
                  if (n_yieldstress22 (ns) /= 0) a2D(i,j,n_yieldstress22(ns),iblk) = spval
 ! LR
-!                 if (n_wave_hs (ns) /=0 ) a2D(i,j,n_wave_hs(ns), iblk) = spval
-!                 if (n_wave_tz (ns) /=0 ) a2D(i,j,n_wave_tz(ns), iblk) = spval
-                 if (n_nearest_wave_hs (ns) /=0 ) a2D(i,j,n_nearest_wave_hs(ns), iblk) = spval
-                 if (n_nearest_wave_tz (ns) /=0 ) a2D(i,j,n_nearest_wave_tz(ns), iblk) = spval
-                 if (n_wave_search_i (ns) /=0 ) a2D(i,j,n_wave_search_i(ns), iblk) = spval
-                 if (n_wave_search_j (ns) /=0 ) a2D(i,j,n_wave_search_j(ns), iblk) = spval
-                 if (n_ice_search_i (ns) /=0 ) a2D(i,j,n_ice_search_i(ns), iblk) = spval
-                 if (n_wave_search_j (ns) /=0 ) a2D(i,j,n_wave_search_j(ns), iblk) = spval
                  if (n_wavespectrum (ns) /= 0) a2D(i,j,n_wavespectrum(ns), iblk) = spval 
 ! LR
               else
@@ -2569,23 +2458,7 @@
                  if (n_yieldstress22     (ns) /= 0) a2D(i,j,n_yieldstress22(ns),iblk)      = &
                        yieldstress22 (i,j,iblk)*avail_hist_fields(n_yieldstress22(ns))%cona
 ! LR
-!                 if (n_wave_hs (ns) /= 0) a2D(i,j,n_wave_hs(ns), iblk ) = &
-!                        wave_hs (i,j,iblk)*avail_hist_fields(n_wave_hs(ns))%cona
-!                 if (n_wave_tz (ns) /= 0) a2D(i,j,n_wave_tz(ns), iblk ) = &
-!                        wave_tz (i,j,iblk)*avail_hist_fields(n_wave_tz(ns))%cona
-                 if (n_nearest_wave_hs (ns) /= 0) a2D(i,j,n_nearest_wave_hs(ns), iblk ) = &
-                        nearest_wave_hs (i,j,iblk)*avail_hist_fields(n_nearest_wave_hs(ns))%cona
-                 if (n_nearest_wave_tz (ns) /= 0) a2D(i,j,n_nearest_wave_tz(ns), iblk ) = &
-                        nearest_wave_tz (i,j,iblk)*avail_hist_fields(n_nearest_wave_tz(ns))%cona
-                 if (n_wave_search_i (ns) /= 0) a2D(i,j,n_wave_search_i(ns), iblk ) = &
-                        wave_search_i (i,j,iblk)*avail_hist_fields(n_wave_search_i(ns))%cona
-                 if (n_wave_search_j (ns) /= 0) a2D(i,j,n_wave_search_j(ns), iblk ) = &
-                        wave_search_j (i,j,iblk)*avail_hist_fields(n_wave_search_j(ns))%cona
-                 if (n_ice_search_i (ns) /= 0) a2D(i,j,n_ice_search_i(ns), iblk ) = &
-                        ice_search_i (i,j,iblk)*avail_hist_fields(n_ice_search_i(ns))%cona
-                 if (n_ice_search_j (ns) /= 0) a2D(i,j,n_ice_search_j(ns), iblk ) = &
-                        ice_search_j (i,j,iblk)*avail_hist_fields(n_ice_search_j(ns))%cona
-                  if (n_wavespectrum (ns) /= 0) a2D(i,j,n_wavespectrum(ns), iblk) = &
+                 if (n_wavespectrum (ns) /= 0) a2D(i,j,n_wavespectrum(ns), iblk) = &
                      wave_spectrum(i,j,25,iblk)*avail_hist_fields(n_wavespectrum(ns))%cona
 
 
