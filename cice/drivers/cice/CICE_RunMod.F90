@@ -52,10 +52,6 @@
       use ice_zbgc_shared, only: skl_bgc
 ! LR
       use ice_wavefracspec, only: wave_spec
-      use ice_domain_size, only: ncat, nfsd, nilyr 
-      use ice_communicate, only: my_task, master_task
-      use ice_constants, only: c0
-      integer (kind=int_kind) :: n,k
 ! LR 
    !--------------------------------------------------------------------
    !  initialize error code and step timer
@@ -142,7 +138,10 @@
       use ice_meltpond_topo, only: write_restart_pond_topo
       use ice_restoring, only: restore_ice, ice_HaloRestore
       use ice_state, only: nt_qsno, trcrn, tr_iage, tr_FY, tr_lvl, &
-          tr_pond_cesm, tr_pond_lvl, tr_pond_topo, tr_brine, tr_aero
+          tr_pond_cesm, tr_pond_lvl, tr_pond_topo, tr_brine, tr_aero, &
+! LR
+          tr_fsd
+! LR
       use ice_step_mod, only: prep_radiation, step_therm1, step_therm2, &
           post_thermo, step_dynamics, step_radiation
       use ice_therm_shared, only: calc_Tsfc
@@ -156,12 +155,8 @@
       use ice_zbgc, only: init_history_bgc, biogeochemistry
       use ice_zbgc_shared, only: skl_bgc
 ! LR
-      use ice_state, only: tr_fsd,trcrn, nt_qice, aicen
       use ice_fsd, only: write_restart_fsd 
       use ice_wavefracspec, only: wave_spec,  wave_frac_fsd
-      use ice_state, only: nt_fsd
-      use ice_domain_size, only: ncat, nfsd 
-      use ice_constants
 ! LR
 
       integer (kind=int_kind) :: &

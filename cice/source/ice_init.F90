@@ -103,11 +103,10 @@
       use shr_file_mod, only: shr_file_setIO
 #endif
 ! CMB LR
-      use ice_fsd, only: restart_fsd, c_mrg, rdc_frzmlt
+      use ice_fsd, only: restart_fsd, c_mrg
       use ice_fsd_thermo, only: new_ice_fs
       use ice_domain_size, only: nfsd
       use ice_state, only: tr_fsd, nt_fsd
-      use ice_therm_shared, only: hfrazilmin
 ! CMB LR
  
       ! local variables
@@ -147,8 +146,7 @@
       namelist /thermo_nml/ &
         kitd,           ktherm,          conduct,                       &
 ! LR
-        c_mrg,          new_ice_fs,       rdc_frzmlt,                   &
-        hfrazilmin,                                                     &
+        c_mrg,          new_ice_fs,                                     &
 ! LR
         a_rapid_mode,   Rac_rapid_mode,  aspect_rapid_mode,             &
         dSdt_slow_mode, phi_c_slow_mode, phi_i_mushy
@@ -263,8 +261,6 @@
 ! LR
       c_mrg = 0.01          ! constant of proportionality for floe merging
       new_ice_fs = 0        ! option for floe size assigned to new ice growth
-      rdc_frzmlt=.false.       ! partitioning of frzmlt (limit for melt)
-      hfrazilmin=0.05_dbl_kind ! min thickness of new frazil ice (m)
 ! LR
       conduct = 'bubbly'     ! 'MU71' or 'bubbly' (Pringle et al 2007)
       calc_Tsfc = .true.     ! calculate surface temperature
@@ -734,8 +730,6 @@
 ! LR
       call broadcast_scalar(c_mrg,              master_task)      
       call broadcast_scalar(new_ice_fs,         master_task)
-      call broadcast_scalar(rdc_frzmlt,         master_task)
-      call broadcast_scalar(hfrazilmin,         master_task)
 ! LR
       call broadcast_scalar(conduct,            master_task)
       call broadcast_scalar(R_ice,              master_task)
@@ -962,10 +956,6 @@
 ! LR        
          write(nu_diag,1005) ' c_mrg                       = ', c_mrg
          write(nu_diag,1020) ' new_ice_fs                  = ', new_ice_fs
-
-
-         write(nu_diag,1010) ' rdc_frzmlt                  = ', rdc_frzmlt
-         write(nu_diag,1005) ' hfrazilmin                  = ', hfrazilmin
 ! LR         
          write(nu_diag,1030) ' atmbndy                   = ', &
                                trim(atmbndy)

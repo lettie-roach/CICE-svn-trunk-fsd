@@ -1580,11 +1580,7 @@
              call accum_hist_field(n_latsurfarea,iblk,latsurf_area(:,:,iblk), a2D)
         if (f_wave_hs_ice(1:1) /= 'x') &
              call accum_hist_field(n_wave_hs_ice,iblk,wave_hs_in_ice(:,:,iblk), a2D)
-!         if (f_nearest_wave_hs (1:1) /= 'x') &
-!             call accum_hist_field(n_nearest_wave_hs,iblk,nearest_wave_hs(:,:,iblk), a2D)
-!         if (f_nearest_wave_tz (1:1) /= 'x') &
-!             call accum_hist_field(n_nearest_wave_tz,iblk,nearest_wave_tz(:,:,iblk), a2D)
-         if (f_hm (1:1) /= 'x') &
+        if (f_hm (1:1) /= 'x') &
              call accum_hist_field(n_hm,iblk,hm(:,:,iblk), a2D)
 
          if (f_concforww (1:1) /= 'x') then

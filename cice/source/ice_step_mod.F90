@@ -206,7 +206,6 @@
       use ice_domain_size, only: nfsd
       use ice_fsd, only: frzmlt_bottom_lateral_fsd, renorm_mfstd
       use ice_flux, only: rside_itd
-      use ice_itd, only: hin_max_init
 ! LR CMB liuxy
 
 

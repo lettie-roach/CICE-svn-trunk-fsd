@@ -19,7 +19,6 @@
       use ice_domain_size, only: max_blocks, ncat, max_aero, max_nstrm, nilyr, &
 ! LR
                                 nfsd
-      use ice_domain_size, only: nx_global, ny_global
 ! LR
       use ice_constants, only: c0, c1, c5, c10, c20, c180, dragio, &
           depressT, stefan_boltzmann, Tffresh, emissivity

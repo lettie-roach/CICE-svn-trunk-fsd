@@ -62,8 +62,7 @@
       use ice_dyn_shared, only: kdyn, init_evp
       use ice_fileunits, only: init_fileunits
       use ice_flux, only: init_coupler_flux, init_history_therm, &
-          init_history_dyn, init_flux_atm, init_flux_ocn, &
-          wave_spectrum ! LR
+          init_history_dyn, init_flux_atm, init_flux_ocn
       use ice_forcing, only: init_forcing_ocn, init_forcing_atmo, &
           get_forcing_atmo, get_forcing_ocn, &
 ! LR
@@ -91,8 +90,6 @@
       use ice_state, only: tr_fsd
       use ice_fsd, only: init_fsd_bounds    !CMB
       use ice_wavefracspec, only: wave_spec
-      use ice_communicate, only: my_task, master_task !LR
-      use ice_domain_size, only: max_blocks
 ! LR CMB 
 
       call init_communicate     ! initial setup for message passing

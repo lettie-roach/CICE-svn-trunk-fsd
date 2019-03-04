@@ -47,7 +47,6 @@
 
       use ice_fsd, only: floe_rad_l, floe_rad_h, floe_rad_c, &
                           floe_binwidth, floe_area_c, floeshape
-      use ice_itd, only: hin_max_init
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions

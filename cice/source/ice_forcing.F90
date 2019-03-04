@@ -65,7 +65,7 @@
             sss_file, &
            pslv_file, &
          sublim_file, &
-           snow_file
+           snow_file  
 
       character (char_len_long), dimension(ncat) :: &  ! input data file names
         topmelt_file, &
@@ -76,7 +76,7 @@
            ftime              ! forcing time (for restart)
 
       integer (kind=int_kind) :: &
-           oldrecnum = 0        ! old record number (save between steps)
+           oldrecnum = 0      ! old record number (save between steps)
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) :: &
           cldf                ! cloud fraction
@@ -231,7 +231,7 @@
 
 !=======================================================================
 
-             subroutine init_forcing_atmo
+      subroutine init_forcing_atmo
 
 ! Determine the current and final year of the forcing cycle based on
 ! namelist input; initialize the atmospheric forcing data filenames.
@@ -824,7 +824,6 @@
 
 #ifdef ncdf 
       integer (kind=int_kind) :: &
-         i, j,m,iblk,&
          nrec             , & ! record number to read
          n2, n4           , & ! like ixm and ixp, but
                               ! adjusted at beginning and end of data
@@ -858,32 +857,30 @@
          ! currently in first half of data interval
             if (ixx <= 1) then
                if (yr > fyear_init) then ! get data from previous year
-                       call file_year (data_file, yr-1)
+                  call file_year (data_file, yr-1)
                else             ! yr = fyear_init, no prior data exists
                   if (maxrec > 12) then ! extrapolate from first record
-                       if (ixx == 1) n2 = ixx
+                     if (ixx == 1) n2 = ixx
                   else          ! go to end of fyear_final
-                          call file_year (data_file, fyear_final)
- 
+                     call file_year (data_file, fyear_final)
                   endif
                endif            ! yr > fyear_init
-                endif               ! ixx <= 1
+            endif               ! ixx <= 1
 
-                call ice_open_nc (data_file, fid)
+            call ice_open_nc (data_file, fid)
 
-                arg = 1
-                nrec = recd + n2
+            arg = 1
+            nrec = recd + n2
 
-                call ice_read_nc & 
-                         (fid, nrec, fieldname, field_data(:,:,arg,:), dbug, &
-                         field_loc, field_type)
+            call ice_read_nc & 
+                 (fid, nrec, fieldname, field_data(:,:,arg,:), dbug, &
+                  field_loc, field_type)
 
-                          call ice_close_nc(fid)
+            if (ixx==1) call ice_close_nc(fid)
          endif                  ! ixm ne -99
-        
-         ! always read ixx data from data file for current year
-          call file_year (data_file, yr)
 
+         ! always read ixx data from data file for current year
+         call file_year (data_file, yr)
          call ice_open_nc (data_file, fid)
 
          arg = arg + 1
@@ -894,37 +891,33 @@
                field_loc, field_type)
 
          if (ixp /= -99) then
-                ! currently in latter half of data interval
-                if (ixx==maxrec) then
-                        if (yr < fyear_final) then ! get data from following year
-                                call ice_close_nc(fid)
-                                call file_year (data_file, yr+1)
-                                call ice_open_nc (data_file, fid)
-                        else             ! yr = fyear_final, no more data exists
-                                if (maxrec > 12) then ! extrapolate from ixx
-                                        n4 = ixx
-                                else          ! go to beginning of fyear_init
-                                        call ice_close_nc(fid)
-                                        call file_year (data_file,fyear_init)
-                                        call ice_open_nc (data_file, fid)
-                                endif
-                        endif            ! yr < fyear_final
-! LR
-                        call ice_close_nc(fid)
-! LR
-                endif               ! ixx = maxrec
+         ! currently in latter half of data interval
+            if (ixx==maxrec) then
+               if (yr < fyear_final) then ! get data from following year
+                  call ice_close_nc(fid)
+                  call file_year (data_file, yr+1)
+                  call ice_open_nc (data_file, fid)
+               else             ! yr = fyear_final, no more data exists
+                  if (maxrec > 12) then ! extrapolate from ixx
+                     n4 = ixx
+                  else          ! go to beginning of fyear_init
+                     call ice_close_nc(fid)
+                     call file_year (data_file, fyear_init)
+                     call ice_open_nc (data_file, fid)
 
-                arg = arg + 1
-                nrec = recd + n4
+                  endif
+               endif            ! yr < fyear_final
+            endif               ! ixx = maxrec
 
-                call ice_read_nc & 
+            arg = arg + 1
+            nrec = recd + n4
+
+            call ice_read_nc & 
                  (fid, nrec, fieldname, field_data(:,:,arg,:), dbug, &
                   field_loc, field_type)
          endif                  ! ixp /= -99
 
-!         if (my_task.eq.master_task) then !????
          call ice_close_nc(fid)
-!         end if !??????
 
       endif                     ! flag
 
@@ -1205,9 +1198,6 @@
 
       ! Compute coefficients
       c1intp =  abs((t2 - tt) / (t2 - t1))
-! LR
-      c1intp = MIN(c1,c1intp)
-! LR
       c2intp =  c1 - c1intp
 
       end subroutine interp_coeff
@@ -1276,7 +1266,6 @@
       end subroutine file_year
 
 !=======================================================================
-
 
       subroutine prepare_forcing (nx_block, ny_block, &
                                   ilo, ihi, jlo, jhi, &

@@ -1083,12 +1083,9 @@
          dimname            ! dimension name            
 
       real (kind=dbl_kind), dimension(:,:), allocatable :: &
-         work_g1, &
-! LR
-         work_g3
-! LR
-      integer (kind=int_kind) :: nx, ny, &
-                                 i, j ! LR
+         work_g1
+
+      integer (kind=int_kind) :: nx, ny
 
 #ifdef ORCA_GRID
       real (kind=dbl_kind), dimension(:,:), allocatable :: &
@@ -1115,14 +1112,8 @@
 
       if (my_task == master_task) then
          allocate(work_g1(nx,ny))
-! LR
-         allocate(work_g3(nx,ny))
-! LR
       else
          allocate(work_g1(1,1))   ! to save memory
-! LR
-         allocate(work_g3(1,1))   ! to save memory
-! LR
       endif
 
       if (my_task == master_task) then
@@ -1143,7 +1134,7 @@
        !--------------------------------------------------------------
 
 #ifndef ORCA_GRID
-         status = nf90_get_var( fid, varid, work_g3, & ! LR
+         status = nf90_get_var( fid, varid, work_g1, &
                start=(/1,1,nrec/), & 
                count=(/nx,ny,1/) )
 #else
@@ -1151,30 +1142,14 @@
             status = nf90_get_var( fid, varid, work_g2, &
                start=(/1,1,nrec/), & 
                count=(/nx_global+2,ny_global+1,1/) )
-            work_g3 = work_g2(2:nx_global+1,1:ny_global)  ! LR
+            work_g1 = work_g2(2:nx_global+1,1:ny_global)
          else
-            status = nf90_get_var( fid, varid, work_g3, & ! LR
+            status = nf90_get_var( fid, varid, work_g1, &
                start=(/1,1,nrec/), & 
                count=(/nx,ny,1/) )
          endif
 #endif
 
- ! LR - I think this was for debugging and can be removed
-        if (varname.eq.'hs') then
-        do i=1,nx
-        do j=1,ny
-                if (work_g3(i,j).ne.work_g3(i,j)) then 
-                         work_g1(i,j) = c0
-                else
-                        !print *, 'fine'
-                        work_g1(i,j) = work_g3(i,j)
-                end if
-        end do
-        end do
-        else 
-                work_g1=work_g3
-        end if
-! LR
       endif                     ! my_task = master_task
 
     !-------------------------------------------------------------------

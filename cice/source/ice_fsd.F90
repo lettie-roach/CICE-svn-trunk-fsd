@@ -67,9 +67,6 @@
         c_mrg            ! constant of proportionality for merging
                          ! see documentation for details
 
-      logical (kind=log_kind), public :: &
-         rdc_frzmlt      ! if true, only (1-oo) of frzmlt can melt (lat and bot)
-
       integer(kind=int_kind), save, public ::  &
          nfreq           ! number of frequencies in wave spectrum   
 ! LR
@@ -610,15 +607,7 @@
          i = indxi(ij)
          j = indxj(ij)
 
-         if (rdc_frzmlt) then
-                if ((aice(i,j) + lead_area(i,j)).gt.(c1+puny)) & 
-                  stop 'c+oo gt 1'
-
-                xtmp = MIN(c1,(aice(i,j) + lead_area(i,j))) * &
-                       frzmlt(i,j)/(fbot(i,j) + fside(i,j) + puny) 
-         else
-                xtmp = frzmlt(i,j)/(fbot(i,j) + fside(i,j) + puny) 
-         end if
+         xtmp = frzmlt(i,j)/(fbot(i,j) + fside(i,j) + puny)  
 
          xtmp = min(xtmp, c1)
          fbot (i,j) = fbot (i,j) * xtmp
@@ -716,7 +705,7 @@
        use ice_flux, only: dfreq, freq
 
       real (kind=dbl_kind), dimension(nfreq), intent(in) :: &
-           local_wave_spec ! e(f), dimension set in ice_forcing or ice_wavebreaking
+           local_wave_spec ! e(f), dimension set in ice_forcing
 
       real (kind=dbl_kind), intent(in) :: &
            wave_hs_in_ice ! 
