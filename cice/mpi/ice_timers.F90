@@ -63,7 +63,6 @@
       timer_latmelt,          &
       timer_merge,            &
       timer_addnewice,        &
-      timer_initwaves,        &! initial calculations for wave fracture 
       timer_waves              ! wave fracture
 ! LR
 !      timer_tmp               ! for temporary timings
@@ -184,7 +183,6 @@
    call get_ice_timer(timer_merge,    'Merge',    nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_addnewice,'AddNew',    nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_latmelt,  'LatMelt',  nblocks,distrb_info%nprocs)
-   call get_ice_timer(timer_initwaves,'InitWaves',nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_waves,    'Waves',    nblocks,distrb_info%nprocs)
 ! LR
 #if (defined CCSMCOUPLED)

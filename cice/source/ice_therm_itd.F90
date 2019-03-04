@@ -1081,13 +1081,13 @@
          salinz           ! initial salinity profile 
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat), &
-         intent(inout) :: & !inout
+         intent(inout) :: &
          aicen   , & ! concentration of ice
          vicen   , & ! volume per unit area of ice          (m)
          vsnon       ! volume per unit area of snow         (m)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_ntrcr,ncat), &  ! needs to be max_ntrcr here
-         intent(inout) :: & !inout
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_ntrcr,ncat), &
+         intent(in) :: &
          trcrn     ! tracer array
 
       real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) :: &
@@ -1097,7 +1097,7 @@
          sss          ! sea surface salinity (ppt)
 
       real (kind=dbl_kind), dimension(nx_block,ny_block), &
-         intent(inout) :: & !inout
+         intent(inout) :: &
          G_radial  , & ! rate of lateral melt (m/s)
          fpond     , & ! fresh water flux to ponds (kg/m^2/s)
          fresh     , & ! fresh water flux to ocean (kg/m^2/s)
@@ -1106,7 +1106,7 @@
          meltl         ! lateral ice melt         (m/step-->cm/day)
   
       real (kind=dbl_kind), dimension(nx_block,ny_block,max_aero), &
-         intent(inout) :: & !intout
+         intent(inout) :: &
          faero_ocn     ! aerosol flux to ocean (kg/m^2/s)
 
       ! local variables
@@ -1114,7 +1114,7 @@
       integer (kind=int_kind) :: &
          i, j        , & ! horizontal indices
          n           , & ! thickness category index
-         k, kk       , & ! layer index
+         k           , & ! layer index
          ij          , & ! horizontal index, combines i and j loops
          icells          ! number of cells with aice > puny
 

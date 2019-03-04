@@ -659,7 +659,7 @@
          vicen   , & ! ice volume (m)
          vsnon       ! snow volume (m)
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,ntrcr,ncat), &   ! needs to be ntrcr here to match call
+      real (kind=dbl_kind), dimension(nx_block,ny_block,ntrcr,ncat), &
          intent(in) :: &
          trcrn       ! tracer array
 
@@ -691,8 +691,6 @@
 
       real (kind=dbl_kind), dimension (:), allocatable :: &
          etot        ! total energy in column
-! LR         fside       ! lateral heat flux (W/m^2)
-
 
       real (kind=dbl_kind) :: &
 ! LR

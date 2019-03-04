@@ -122,8 +122,8 @@
          atm_data_dir , & ! top directory for atmospheric data
          ocn_data_dir , & ! top directory for ocean data
 ! LR
-         wave_spec_dir, & ! dir+file name for wave spectrum
-         wave_spec_file, & ! dir+file name for wave spectrum
+         wave_spec_dir, & ! dir name for wave spectrum
+         wave_spec_file, & ! file name for wave spectrum
 ! LR
          oceanmixed_file  ! file name for ocean forcing data
 
