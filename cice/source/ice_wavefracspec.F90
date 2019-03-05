@@ -281,7 +281,7 @@
      subroutine wave_frac(hbar, spec_efreq, frac_local)
 
      use ice_communicate, only: my_task, master_task
-     use ice_fsd, only: floe_rad_l, floe_binwidth, floe_rad_c, floe_rad_h
+     use ice_fsd, only: floe_rad_l, floe_rad_c
      use ice_domain_size, only: nfsd
      use ice_flux, only: freq, dfreq
  
@@ -367,9 +367,7 @@
          end do
          
          if ((.NOT.(ALL(eta.eq.c0))).and.(hbar.gt.puny)) then 
-            !if (my_task.eq.32) print *, 'now get frac lengths'
             call get_fraclengths(X, eta, fraclengths, hbar , e_stop)
-            !if (my_task.eq.32) print *, 'got fraclengths'
          end if
      end do
  

@@ -1038,7 +1038,13 @@
 !=======================================================================
 ! Melts the ice thickness distribution and the floe size distribution, 
 ! given fside, which was computed in frzmlt_bottom_lateral_fsdtherm
+!
+! OR if no FSD...
+!
+! Given the fraction of ice melting laterally in each grid cell
+!  (computed in subroutine frzmlt_bottom_lateral), melt ice.
 ! 
+
 ! author: C. M. Bitz, UW
 ! 2003:   Modified by William H. Lipscomb and Elizabeth C. Hunke, LANL
 ! 2016:   Modified by C. M. Bitz, UW, to add floe effects
@@ -1510,7 +1516,7 @@
       use ice_zbgc, only: add_new_ice_bgc
       use ice_zbgc_shared, only: skl_bgc
       use ice_fsd, only: floe_rad_c, floe_binwidth, &
-                         floe_area_l, floe_area_h, nfreq, wave_dep_growth, &
+                         nfreq, wave_dep_growth, &
                          new_ice_fs
       use ice_domain_size, only: nfsd
 

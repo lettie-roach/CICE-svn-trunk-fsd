@@ -621,7 +621,7 @@
                                         Cdn_ocn    )
 
        use ice_state, only: nt_fsd, tr_fsd
-       use ice_fsd, only: floe_rad_c, floe_binwidth
+       use ice_fsd, only: floe_rad_c
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions

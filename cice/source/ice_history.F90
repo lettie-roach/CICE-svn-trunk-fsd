@@ -1565,9 +1565,9 @@
                 do n = 1, ncat_hist
                 do k = 1, nfsd_hist
                     ! number-mean radius
-                    worka(i,j) = worka(i,j) + (floe_rad_c(k)*aicen_init(i,j,n,iblk)*trcrn(i,j,nt_fsd+k-1,n,iblk)/floe_area_c(k))
+                    worka(i,j) = worka(i,j) + (floe_rad_c(k)*aicen_init(i,j,n,iblk)*trcrn(i,j,nt_fsd+k-1,n,iblk)/(4.*floeshape*floe_rad_c(k)**c2))
                     ! normalization factor
-                    workb(i,j) = workb(i,j) + aicen_init(i,j,n,iblk)*trcrn(i,j,nt_fsd+k-1,n,iblk)/floe_area_c(k)
+                    workb(i,j) = workb(i,j) + aicen_init(i,j,n,iblk)*trcrn(i,j,nt_fsd+k-1,n,iblk)/(4.*floeshape*floe_rad_c(k)**c2)
                 end do
                 end do
                 ! number-mean diameter, following Eqn. 5 in HT2017

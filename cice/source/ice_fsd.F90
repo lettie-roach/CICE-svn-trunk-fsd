@@ -34,25 +34,12 @@
  
       real(kind=dbl_kind), dimension(nfsd), save, public ::  &
          floe_rad_l,    &  ! fsd size lower bound in m (radius)
-         floe_rad_h,    &  ! fsd size higher bound in m (radius)
          floe_rad_c,    &  ! fsd size bin centre in m (radius)
-         floe_binwidth, &  ! fsd size bin width in m (radius)
-         floe_area_l,   &  ! fsd area at lower bound (m^2)
-         floe_area_h,   &  ! fsd area at higher bound (m^2)
-         floe_area_c,   &  ! fsd area at bin centre (m^2)
-         floe_area_binwidth, & ! floe area bin width (m^2)
-         area_scaled_l, &  ! area bins scaled so they begin at zero
-         area_scaled_h, &  ! and no binwidth is greater than 1
-         area_scaled_c, &  ! (dimensionless)
-         area_scaled_binwidth
-
-      integer(kind=int_kind), dimension(nfsd, nfsd), save, public ::  &
-         alpha_mrg
+         floe_binwidth     ! fsd size bin width in m (radius)
 
       real (kind=dbl_kind), parameter,public :: &
          floeshape = 0.66_dbl_kind  ! constant from Steele (unitless)
 
-! LR
       real (kind=dbl_kind), dimension (nx_block,ny_block,nfsd,max_blocks), public, save :: &
         d_afsd_latg, d_afsd_latm, d_afsd_addnew, d_afsd_merge, d_afsd_wave
 
@@ -68,7 +55,22 @@
 
       integer(kind=int_kind), save, public ::  &
          nfreq           ! number of frequencies in wave spectrum   
-! LR
+
+     real(kind=dbl_kind), dimension(nfsd) ::  &
+         floe_rad_h,    &  ! fsd size higher bound in m (radius)
+         floe_area_l,   &  ! fsd area at lower bound (m^2)
+         floe_area_h,   &  ! fsd area at higher bound (m^2)
+         floe_area_c,   &  ! fsd area at bin centre (m^2)
+         floe_area_binwidth, & ! floe area bin width (m^2)
+         area_scaled_l, &  ! area bins scaled so they begin at zero
+         area_scaled_h, &  ! and no binwidth is greater than 1
+         area_scaled_c, &  ! (dimensionless)
+         area_scaled_binwidth
+
+      integer(kind=int_kind), dimension(nfsd, nfsd) ::  &
+         alpha_mrg
+
+
 
 
 !=======================================================================
