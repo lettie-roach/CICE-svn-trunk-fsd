@@ -6,11 +6,13 @@
 
       use ice_kinds_mod
       use ice_constants
-      use ice_domain_size, only: nfsd, ncat, max_ntrcr, max_blocks
+      use ice_flux, only: dfreq
+      use ice_domain_size, only: nfsd, ncat, nfreq, &
+                                 max_ntrcr, max_blocks
  
       implicit none
       private
-      public :: wave_frac, wave_frac_fsd 
+      public :: wave_frac, icepack_wavefracfsd 
 
 
 
@@ -106,19 +108,17 @@
       end function get_subdt_wave
 
 !=======================================================================
-!  Author: Lettie Roach, NIWA, 2018
+! Author: Lettie Roach, NIWA, 2019
 ! 
-! Given fracture histogram computed from local wave spectrum, evolve FSD
+! Wrapper routine for wave_frac_fsd
 
-     subroutine wave_frac_fsd
+     subroutine icepack_wavefracfsd
 
-     use ice_calendar, only: dt
-     use ice_communicate, only: my_task
      use ice_domain, only: nblocks, blocks_ice
-     use ice_blocks, only: block, get_block, nx_block, ny_block
+     use ice_blocks, only: block, get_block
      use ice_state, only: nt_fsd, aice, aicen, vice, &
-                          vicen, trcrn, nt_qice
-     use ice_flux, only: wave_spectrum, wave_hs_in_ice, dfreq
+                          trcrn
+     use ice_flux, only: wave_spectrum, wave_hs_in_ice
      use ice_fsd, only: d_afsd_wave, d_amfstd_wave
  
      ! local variables
@@ -126,33 +126,10 @@
          this_block      ! block information for current block
 
       integer (kind=int_kind) :: &  
-        iblk, n, k, i, j, ks, t, &
-        ilo, ihi, jlo, jhi, & ! beginning and end of physical domain
-        nsubt ! number of subcycles 
+        iblk, i, j, &
+        ilo, ihi, jlo, jhi ! beginning and end of physical domain
 
-      real (kind=dbl_kind), dimension (nfsd) :: &
-        fracture_hist
-
-      real (kind=dbl_kind), dimension (nfsd, nfsd) :: &
-        frac    
-
-      real (kind=dbl_kind) :: &
-        hbar, elapsed_t, subdt
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nfsd,ncat) :: &
-           afstd, &           ! joint floe size and ice thickness area distribution 
-           amfstd_init, &     ! tracer array
-           afstd_init         ! aicen*trcrn
-
-      real (kind=dbl_kind), dimension (nfsd) :: &
-         amfstd_tmp, d_amfstd_tmp, &
-         stability_test, &   ! check timestep stability
-         omega, &
-         check_dt, &
-         gain, loss, &
-         tempfracs
-
-     !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block,hbar,fracture_hist,amfstd_init,amfstd_tmp,d_amfstd_tmp,n,k,ks,loss,gain,omega,check_dt,nsubt,subdt,elapsed_t)
+     !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block)
      do iblk = 1, nblocks
 
          this_block = get_block(blocks_ice(iblk),iblk)         
@@ -164,106 +141,193 @@
          do j = jlo, jhi
          do i = ilo, ihi
 
-
-            d_afsd_wave(i,j,:,iblk) = c0
-
-            do n=1, ncat
-                        if (ANY(trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n,iblk).lt.c0)) stop 'neg b4-wb'
-            end do
-
-
-            if ((aice(i,j,iblk).gt.p01).and.(.NOT.(ALL(wave_spectrum(i,j,:,iblk).lt.puny)))) then
-
-                ! save for diagnostics
-                wave_hs_in_ice(i,j,iblk) = c4*SQRT(SUM(wave_spectrum(i,j,:,iblk)*dfreq))
-
-                hbar = vice(i,j,iblk) / aice(i,j,iblk)
-
-                call  wave_frac(hbar, wave_spectrum(i,j,:,iblk), fracture_hist)
-
-                if (.not. ALL(fracture_hist.lt.puny)) then
-
-                    do n = 1, ncat
-                    if ((aicen(i,j,n,iblk).gt.puny).and.&
-                       (SUM(trcrn(i,j,nt_fsd+1:nt_fsd+nfsd-1,n,iblk)).gt.puny).and.&
-                       (.NOT.(trcrn(i,j,nt_fsd+1,n,iblk).ge.c1))) then
-                       
-                        amfstd_init(i,j,:,n)=trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n,iblk)
-
-                        if (ABS(SUM(amfstd_init(i,j,:,n))-c1).gt.puny) stop &
-                                'init mFSTD not norm, wave'
-                        
-                        ! protect against small numerical errors
-                        WHERE (amfstd_init(i,j,:,n).lt.puny) amfstd_init(i,j,:,n) = c0
-                        amfstd_init(i,j,:,n) = amfstd_init(i,j,:,n) / SUM(amfstd_init(i,j,:,n))
-
-                        amfstd_tmp =  amfstd_init(i,j,:,n)
-
-                       ! frac does not vary within subcycle
-                        frac(:,:) = c0
-                        do k = 2, nfsd
-                                frac(k,:k-1) = fracture_hist(:k-1)
-                                frac(k,k:) = c0 
-                        end do
-                        
-                        do ks=1,nfsd
-                            if (SUM(frac(ks,:)).gt.c0) frac(ks,:) = frac(ks,:)/SUM(frac(ks,:))
-                        end do
-
-                        ! adaptive sub-timestep
-                        elapsed_t = c0
-                        DO WHILE (elapsed_t.lt.dt)
-
-                             ! calculate d_amfstd using current afstd
-                             d_amfstd_tmp = get_damfstd_wave(amfstd_tmp, fracture_hist, frac)
-                             WHERE (ABS(d_amfstd_tmp).lt.puny) d_amfstd_tmp = c0 
- 
-                             ! timestep required for this
-                             subdt = get_subdt_wave(amfstd_tmp, d_amfstd_tmp)
-                             subdt = MIN(subdt, dt)
-
-                             ! update amfstd and elpased time
-                             amfstd_tmp = amfstd_tmp + subdt * d_amfstd_tmp(:)
-
-                             ! check conservation and negatives
-                            if (ANY(amfstd_tmp.lt.-puny)) stop &
-                                     'wb, <0 in loop'
-
-                             if (ANY(amfstd_tmp.gt.c1+puny)) stop &
-                                     'wb, >1 in loop'
-
-                             ! in case of small numerical errors
-                             WHERE (amfstd_tmp.lt.puny) amfstd_tmp = c0
-                             amfstd_tmp = amfstd_tmp/SUM(amfstd_tmp)
-
-                            ! update time
-                             elapsed_t = elapsed_t + subdt 
-
-                        END DO
-
-                        ! was already normalized in loop
-                        trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n,iblk) = amfstd_tmp
-     
-                        if (ABS(SUM(trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n,iblk))-c1).gt.puny) stop 'not 1 wb'
-                        if (ANY(trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n,iblk).lt.c0)) stop 'neg wb'
-                        if (ANY(trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n,iblk).gt.c1)) stop '>1 wb'
-
-                        ! for diagnostics
-                        d_amfstd_wave(i,j,:,n,iblk) = trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n,iblk) - amfstd_init(i,j,:,n)  
-                        d_afsd_wave(i,j,:,iblk) =  d_afsd_wave(i,j,:,iblk) + aicen(i,j,n,iblk)*d_amfstd_wave(i,j,:,n,iblk)
-
-                    end if ! aicen>puny
-                    end do ! n
-
-                end if ! not all frac zero
-            end if ! aice>p01
-
+            call wave_frac_fsd(aice(i,j,iblk),  vice(i,j,iblk),        & ! in 
+                               aicen(i,j,:,iblk),                      & ! in
+                               wave_spectrum(i,j,:,iblk),              & ! in
+                               trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,:,iblk), & ! inout
+                               wave_hs_in_ice(i,j,iblk),               & ! out
+                               d_afsd_wave(i,j,:,iblk),                & ! out
+                               d_amfstd_wave(i,j,:,:,iblk)             ) ! out
+            
          end do ! i
          end do  !j
 
      end do ! iblk
      !$OMP END PARALLEL DO
 
+
+     end subroutine icepack_wavefracfsd
+
+
+
+!=======================================================================
+!  Author: Lettie Roach, NIWA, 2018
+! 
+! Given fracture histogram computed from local wave spectrum, evolve FSD
+
+     subroutine wave_frac_fsd(aice,  vice,        & ! in 
+                              aicen,              & ! in
+                              wave_spectrum,      & ! in
+                              trcrn,              & ! inout
+                              wave_hs_in_ice,     & ! out
+                              d_afsd_wave,        & ! out
+                              d_amfstd_wave       ) ! out
+            
+
+
+     use ice_calendar, only: dt
+
+     real (kind=dbl_kind), intent(in) :: &
+         aice, &
+         vice
+
+     real (kind=dbl_kind), dimension(ncat), intent(in) :: &
+         aicen
+
+     real (kind=dbl_kind), dimension(nfreq), intent(in) :: &
+         wave_spectrum
+
+     real (kind=dbl_kind), dimension(nfsd,ncat), intent(inout) :: &
+         trcrn
+
+     real (kind=dbl_kind), intent(out) :: &
+         wave_hs_in_ice
+
+     real (kind=dbl_kind), dimension(nfsd), intent(out) :: &
+         d_afsd_wave
+
+      real (kind=dbl_kind), dimension(nfsd,ncat), intent(out) :: &
+         d_amfstd_wave 
+
+     ! local variables
+      integer (kind=int_kind) :: &  
+        n, k, ks, t, &
+        nsubt ! number of subcycles 
+
+      real (kind=dbl_kind), dimension (nfsd) :: &
+        fracture_hist
+
+      real (kind=dbl_kind), dimension (nfsd, nfsd) :: &
+        frac    
+
+      real (kind=dbl_kind) :: &
+        hbar, elapsed_t, subdt
+
+      real (kind=dbl_kind), dimension (nfsd) :: &
+           amfstd_init     ! tracer array
+
+      real (kind=dbl_kind), dimension (nfsd) :: &
+         amfstd_tmp, d_amfstd_tmp, &
+         stability_test, &   ! check timestep stability
+         omega, &
+         check_dt, &
+         gain, loss, &
+         tempfracs
+
+    !------------------------------------
+
+    ! initialize diagnostics
+    d_afsd_wave(:) = c0
+    d_amfstd_wave(:,:) = c0
+    wave_hs_in_ice = c0
+
+    ! sanity check
+    if (ANY(trcrn(:,:).lt.c0)) stop 'neg b4-wb'
+
+    ! do not try to fracture for minimal ice concentration or zero wave spectrum
+    if ((aice.gt.p01).and.(.NOT.(ALL(wave_spectrum(:).lt.puny)))) then
+
+        ! save for diagnostics
+        wave_hs_in_ice = c4*SQRT(SUM(wave_spectrum(:)*dfreq(:)))
+
+        hbar = vice / aice
+
+        ! calculate fracture histogram
+        call  wave_frac(hbar, wave_spectrum(:), fracture_hist)
+
+        ! if fracture occurs
+        if (.not. ALL(fracture_hist.lt.puny)) then
+
+            do n = 1, ncat
+
+                if ((aicen(n).gt.puny).and.&
+                    (SUM(trcrn(:,n)).gt.puny).and.&
+                    (.NOT.(trcrn(1,n).ge.c1))) then
+                           
+                    ! for diagnostics
+                    amfstd_init(:) = trcrn(:,n)
+
+                    ! sanity check
+                    if (ABS(SUM(amfstd_init(:))-c1).gt.puny) stop &
+                                    'init mFSTD not norm, wave'
+                            
+                    ! protect against small numerical errors
+                    WHERE (amfstd_init.lt.puny) amfstd_init = c0
+                    amfstd_init = amfstd_init(:) / SUM(amfstd_init(:))
+
+                    amfstd_tmp =  amfstd_init
+
+                    ! frac does not vary within subcycle
+                    frac(:,:) = c0
+                    do k = 2, nfsd
+                            frac(k,:k-1) = fracture_hist(:k-1)
+                            frac(k,k:) = c0 
+                    end do
+                    
+                    do ks=1,nfsd
+                        if (SUM(frac(ks,:)).gt.c0) frac(ks,:) = frac(ks,:)/SUM(frac(ks,:))
+                    end do
+
+                    ! adaptive sub-timestep
+                    elapsed_t = c0
+                    DO WHILE (elapsed_t.lt.dt)
+
+                         ! calculate d_amfstd using current afstd
+                         d_amfstd_tmp = get_damfstd_wave(amfstd_tmp, fracture_hist, frac)
+                         WHERE (ABS(d_amfstd_tmp).lt.puny) d_amfstd_tmp = c0 
+
+                         ! timestep required for this
+                         subdt = get_subdt_wave(amfstd_tmp, d_amfstd_tmp)
+                         subdt = MIN(subdt, dt)
+
+                         ! update amfstd and elpased time
+                         amfstd_tmp = amfstd_tmp + subdt * d_amfstd_tmp(:)
+
+                         ! check conservation and negatives
+                        if (ANY(amfstd_tmp.lt.-puny)) stop &
+                                 'wb, <0 in loop'
+
+                         if (ANY(amfstd_tmp.gt.c1+puny)) stop &
+                                 'wb, >1 in loop'
+
+                         ! in case of small numerical errors
+                         WHERE (amfstd_tmp.lt.puny) amfstd_tmp = c0
+                         amfstd_tmp = amfstd_tmp/SUM(amfstd_tmp)
+
+                        ! update time
+                         elapsed_t = elapsed_t + subdt 
+
+                    END DO
+
+                    ! update trcrn    
+                    ! was already normalized in loop
+                    trcrn(:,n) = amfstd_tmp
+     
+                    ! sanity checks
+                    if (ABS(SUM(trcrn(:,n))-c1).gt.puny) stop 'not 1 wb'
+                    if (ANY(trcrn(:,n).lt.c0)) stop 'neg wb'
+                    if (ANY(trcrn(:,n).gt.c1)) stop '>1 wb'
+
+                    ! for diagnostics
+                    d_amfstd_wave(:,n) = trcrn(:,n) - amfstd_init(:)  
+                    d_afsd_wave(:) =  d_afsd_wave(:) + aicen(n)*d_amfstd_wave(:,n)
+
+                end if ! aicen>puny
+            end do ! n
+
+        end if ! not all frac zero
+    end if ! aice>p01
+        
 
      end subroutine wave_frac_fsd
 
@@ -280,15 +344,14 @@
 
      subroutine wave_frac(hbar, spec_efreq, frac_local)
 
-     use ice_communicate, only: my_task, master_task
      use ice_fsd, only: floe_rad_l, floe_rad_c
      use ice_domain_size, only: nfsd
-     use ice_flux, only: freq, dfreq
+     use ice_flux, only: freq
  
      real (kind=dbl_kind),  intent(in) :: &
          hbar   ! mean ice thickness
 ! TEMP INOUT
-     real (kind=dbl_kind), dimension(25), intent(inout) :: &
+     real (kind=dbl_kind), dimension(nfreq), intent(in) :: &
          spec_efreq
  
      real (kind=dbl_kind), dimension (nfsd), intent(out) :: &
@@ -417,7 +480,6 @@
 !
         subroutine get_fraclengths(X, eta, fraclengths, hbar, e_stop)
 
-        use ice_communicate, only: my_task
 
         real (kind=dbl_kind) :: &
                 hbar

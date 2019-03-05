@@ -1516,9 +1516,9 @@
       use ice_zbgc, only: add_new_ice_bgc
       use ice_zbgc_shared, only: skl_bgc
       use ice_fsd, only: floe_rad_c, floe_binwidth, &
-                         nfreq, wave_dep_growth, &
+                         wave_dep_growth, &
                          new_ice_fs
-      use ice_domain_size, only: nfsd
+      use ice_domain_size, only: nfsd, nfreq
 
       ! FSD
       real (kind=dbl_kind), dimension(nx_block,ny_block,ncat), intent(out) :: &

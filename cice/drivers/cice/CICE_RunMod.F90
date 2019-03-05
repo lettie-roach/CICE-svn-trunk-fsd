@@ -156,7 +156,7 @@
       use ice_zbgc_shared, only: skl_bgc
 ! LR
       use ice_fsd, only: write_restart_fsd 
-      use ice_wavefracspec, only: wave_spec,  wave_frac_fsd
+      use ice_wavefracspec, only: wave_spec,  icepack_wavefracfsd
 ! LR
 
       integer (kind=int_kind) :: &
@@ -216,7 +216,7 @@
         ! fracture 
         call ice_timer_start(timer_waves)
 
-        if (tr_fsd.and.wave_spec) call wave_frac_fsd
+        if (tr_fsd.and.wave_spec) call icepack_wavefracfsd
 
         call ice_timer_stop(timer_waves)        
 ! LR

@@ -12,7 +12,7 @@
  
       module ice_fsd
 
-      use ice_domain_size, only: ncat, nfsd, max_blocks
+      use ice_domain_size, only: ncat, nfsd, max_blocks, nfreq
       use ice_blocks, only: nx_block, ny_block
       use ice_state, only: nt_fsd 
       use ice_kinds_mod
@@ -52,9 +52,6 @@
       real (kind=dbl_kind), public :: &
         c_mrg            ! constant of proportionality for merging
                          ! see documentation for details
-
-      integer(kind=int_kind), save, public ::  &
-         nfreq           ! number of frequencies in wave spectrum   
 
      real(kind=dbl_kind), dimension(nfsd) ::  &
          floe_rad_h,    &  ! fsd size higher bound in m (radius)

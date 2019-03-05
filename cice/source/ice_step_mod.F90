@@ -788,8 +788,8 @@
                          d_afsd_latg, d_amfstd_latg, d_an_latg, &
                          d_afsd_addnew, d_amfstd_addnew, d_an_addnew, &
                          d_afsd_latm, d_amfstd_latm, d_an_latm, &
-                         d_afsd_merge, d_amfstd_merge, nfreq
-      use ice_domain_size, only: nfsd, nilyr
+                         d_afsd_merge, d_amfstd_merge
+      use ice_domain_size, only: nfsd, nilyr, nfreq
       use ice_grid, only: tarea
       use ice_state, only: nt_fsd, nt_Tsfc, vice, nt_qice
       use ice_wavefracspec, only: wave_spec
@@ -828,9 +828,6 @@
 
       real (kind=dbl_kind), dimension (nx_block, ny_block, nfsd, ncat) :: &
         amfstd_save
-
-      nfreq = SIZE(wave_spectrum, DIM=3)
-
       
 ! LR
 

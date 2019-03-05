@@ -35,6 +35,8 @@
 !        nltrcr    = max_nbtrcr*TRBRI, & ! maximum layer bgc tracers (for zbgc)
 ! LR
         nfsd    = NFSDCAT      , & ! number of floe size categories
+        nfreq   = 25           , & ! number of frequencies for wave spectrum
+                                   ! hardcoded for WWIII
 ! LR
 
         max_ntrcr =   1         & ! 1 = surface temperature              

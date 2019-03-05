@@ -18,7 +18,7 @@
       use ice_blocks, only: nx_block, ny_block
       use ice_domain_size, only: max_blocks, ncat, max_aero, max_nstrm, nilyr, &
 ! LR
-                                nfsd
+                                nfsd, nfreq
 ! LR
       use ice_constants, only: c0, c1, c5, c10, c20, c180, dragio, &
           depressT, stefan_boltzmann, Tffresh, emissivity
@@ -312,11 +312,11 @@
          fbottom, &     ! flux that goes to bottom melt (W/m^2)
          flateral
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,25,max_blocks), public :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nfreq,max_blocks), public :: &
           wave_spectrum     ! wave spectrum in 25 frequencies - e(f) from Wavewatch
                             ! power spectral density of surface elevation (m^2 s)
 
-     real (kind=dbl_kind), dimension (25), public :: &
+     real (kind=dbl_kind), dimension (nfreq), public :: &
           freq, dfreq        ! freqency values and binwidths
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public :: &
