@@ -186,19 +186,9 @@
 
       character(char_len_long) :: spec_file
 
-      ! LR all set for freq 25 
+    ! LR all set for freq 25 
 
-      if (allocated(wave_spectrum)) deallocate(wave_spectrum)
-      allocate(wave_spectrum(nx_block,ny_block, 25, max_blocks))
-    
-      if (allocated(freq)) deallocate(freq)
-      allocate(freq(25))
-
-      if (allocated(dfreq)) deallocate(dfreq)
-      allocate(dfreq(25))
-
-
-      if (trim(wave_spec_file).eq.'') then
+    if (trim(wave_spec_file).eq.'') then
         wave_spectrum(:,:,:,:) = c0
       
     else
@@ -224,7 +214,7 @@
  
         ! boundaries of bin n are at f(n)*sqrt(1/C) and f(n)*sqrt(C) 
         dfreq(:) = freq(:)*(SQRT(1.1_dbl_kind) - SQRT(c1/1.1_dbl_kind))
-     end if
+    end if
 #endif
          end subroutine get_wave_spec
 

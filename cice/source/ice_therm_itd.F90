@@ -1293,7 +1293,7 @@
 
      !-----------------------------------------------------------------                                            
      ! Increment fluxes and melt the ice using rside as per 
-     ! existing routine
+     ! existing routine, but for each thickness category individually
      !-----------------------------------------------------------------                                            
      do n = 1, ncat
 
@@ -1452,9 +1452,6 @@
 
                     end subroutine lateral_melt
 
-
-
-
 !=======================================================================
 !
 ! Given the volume of new ice grown in open water, compute its area
@@ -1479,10 +1476,12 @@
                               ntrcr,     icells,     &
                               indxi,     indxj,      &
                               dt,                    &
+                              lead_area, latsurf_area, & ! LR
                               aicen,     trcrn,      &
                               vicen,                 &
                               aice0,     aice,       &
                               frzmlt,    frazil,     &
+                              vlateral,              &
                               frz_onset, yday,       &
                               update_ocn_f,          &
                               fresh,     fsalt,      &
@@ -1492,18 +1491,44 @@
                               nbtrcr,    flux_bio,   &
                               ocean_bio, &
                               l_stop,                &
-                              istop,     jstop)
+                              istop,     jstop      , &
+                              d_an_latg,        d_an_addnew,    &
+                              d_afsd_latg,      d_afsd_addnew,  &
+                              d_amfstd_latg,    d_amfstd_addnew,&
+                              G_radial,         tarea, &
+                              wave_spectrum, wave_hs_in_ice )
+         
 
       use ice_itd, only: hin_max, column_sum, &
                          column_conservation_check 
       use ice_state, only: nt_Tsfc, nt_iage, nt_FY, nt_alvl, nt_vlvl, nt_aero, &
-                           nt_sice, nt_qice, &
+                           nt_sice, nt_qice, nt_fsd, &
                            nt_apnd, tr_pond_cesm, tr_pond_lvl, tr_pond_topo, &
-                           tr_iage, tr_FY, tr_lvl, tr_aero, tr_brine
+                           tr_iage, tr_FY, tr_lvl, tr_aero, tr_brine, tr_fsd
       use ice_therm_mushy, only: liquidus_temperature_mush, enthalpy_mush
       use ice_therm_shared, only: ktherm, hfrazilmin
       use ice_zbgc, only: add_new_ice_bgc
       use ice_zbgc_shared, only: skl_bgc
+      use ice_fsd, only: floe_rad_c, floe_binwidth, &
+                         floe_area_l, floe_area_h, nfreq, wave_dep_growth, &
+                         new_ice_fs
+      use ice_domain_size, only: nfsd
+
+      ! FSD
+      real (kind=dbl_kind), dimension(nx_block,ny_block,ncat), intent(out) :: &
+         d_an_latg, d_an_addnew
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block,nfsd,ncat), intent(out) :: &
+         d_amfstd_latg, d_amfstd_addnew
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block,nfsd), intent(out) :: &
+         d_afsd_latg, d_afsd_addnew
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block, nfreq), intent(in)  :: &
+         wave_spectrum
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in)  :: &
+         wave_hs_in_ice
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -1518,6 +1543,9 @@
          dt        ! time step (s)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
+         tarea, &  ! grid cell area (m^2) ! plan to remove
+         lead_area, & ! fractional area of ice in lead region
+         latsurf_area, & ! fractional area of ice on sides of floes
          aice  , & ! total concentration of ice
          frzmlt, & ! freezing/melting potential (W/m^2)
          Tf    , & ! freezing temperature (C)
@@ -1535,8 +1563,10 @@
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(inout) :: &
+         G_radial  , & ! lateral melt rate (m/s)
          aice0     , & ! concentration of open water
          frazil    , & ! frazil ice growth        (m/step-->cm/day)
+         vlateral    , & ! lateral ice growth        (m/step-->cm/day)
          fresh     , & ! fresh water flux to ocean (kg/m^2/s)
          fsalt         ! salt flux to ocean (kg/m^2/s)
 
@@ -1581,11 +1611,15 @@
          i, j         , & ! horizontal indices
          n            , & ! ice category index
          k            , & ! ice layer index
-         it               ! aerosol tracer index
-
-      real (kind=dbl_kind), dimension (icells) :: &
+         it           , & ! aerosol tracer index
+! LR
+         new_size        ! index for floe size of new ice 
+! LR
+ 
+        real (kind=dbl_kind), dimension (icells) :: &
          ai0new       , & ! area of new ice added to cat 1
          vi0new       , & ! volume of new ice added to cat 1
+         vi0new_lat   , & ! LR
          hsurp            ! thickness of new ice added to each cat
 
       real (kind=dbl_kind), dimension (icells) :: &
@@ -1634,7 +1668,53 @@
 
       real (kind=dbl_kind), dimension (icells) :: &
          vi0_init         ! volume of new ice
+ ! LR       
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat) :: &
+         area2, d_an_tot  ! change in the ITD due to lateral growth and new ice
 
+      real (kind=dbl_kind), dimension (icells,ncat) :: &
+         ain0new     , &  ! area of new ice added to any thickness cat
+         vin0new          ! volume of new ice added to any thickness cat
+ 
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nfsd,ncat) :: &
+         areal_mfstd_latg, & ! areal mFSTD after lateral growth
+         areal_mfstd_init    ! initial areal mFSTD (tilda)
+
+      real (kind=dbl_kind), dimension (nfsd) :: &
+         fin_diff, &         ! finite differences for G_r*tilda(L)
+         areal_mfstd_ni      ! areal mFSTD after new ice added
+
+      real (kind=dbl_kind) :: &
+         totfrac, &      ! for FSD normalization
+         amount_taken              
+
+      real (kind=dbl_kind), dimension (nfsd+1) :: &
+         f_flx
+
+      ! initialize vars     
+      if (tr_fsd) areal_mfstd_init = trcrn(:,:,nt_fsd:nt_fsd+nfsd-1,:)
+      if (tr_fsd) areal_mfstd_latg = areal_mfstd_init
+      area2 = aicen
+
+      ! initialize these to zero
+      d_an_latg = c0
+      d_an_addnew = c0        ! compute these regardless of diags
+      d_an_tot = c0
+      hsurp(:)  = c0
+      hi0new = c0
+      ai0new(:) = c0
+      ain0new(:,:) = c0
+      vin0new(:,:) = c0
+      vi0new_lat = c0
+      vlateral(:,:) = c0
+
+      ! diagnostics returned like this if no growth occurs
+      d_amfstd_latg = c0
+      d_amfstd_addnew = c0        
+      d_afsd_latg = c0
+      d_afsd_addnew = c0       
+! LR
+   
       !-----------------------------------------------------------------
       ! initialize
       !-----------------------------------------------------------------
@@ -1749,7 +1829,7 @@
          endif
 
          ! history diagnostics
-         frazil(i,j) = vi0new(ij)
+         if (.NOT.tr_fsd) frazil(i,j) = vi0new(ij)
 
          if (present(frz_onset) .and. present(yday)) then
             if (frazil(i,j) > puny .and. frz_onset(i,j) < puny) &
@@ -1791,14 +1871,87 @@
 
          if (vi0new(ij) > c0) then
 
+            if (tr_fsd) then
+           
+                !--------LR - lateral growth of existing ice
+                ! partition volume into lateral growth and frazil
+
+                if (latsurf_area(i,j).gt.puny) then ! otherwise remains zero
+                    vi0new_lat(ij)=(vi0new(ij)*lead_area(i,j)) / &
+                                   (c1+(aice(i,j)/latsurf_area(i,j)))
+                end if
+
+                if (vi0new_lat(ij).lt.c0) stop 'latlt0'
+                                                   
+                ! LR, for diagnostics
+                vlateral(i,j) = vi0new_lat(ij) 
+                frazil(i,j) = vi0new(ij) - vi0new_lat(ij)
+                       
+                !------- LR: changes for lateral growth
+
+                if (vi0new_lat(ij).gt.puny) then
+                                   
+                    G_radial(i,j)=vi0new_lat(ij)/dt
+
+                    ! compute change to ITD      
+                    do n=1,ncat
+
+                        if (aicen(i,j,n).gt.puny) then
+                            if (ABS(SUM(areal_mfstd_init(i,j,:,n))-c1).gt.1.0e-9_dbl_kind) then
+                                print *, SUM(areal_mfstd_init(i,j,:,n)), ABS(SUM(areal_mfstd_init(i,j,:,n))-c1)
+                                print *, 'WARNING init not normed, ani'
+                            end if
+                            
+                            ! in case of 10e-10 errors
+                            areal_mfstd_init(i,j,:,n) = areal_mfstd_init(i,j,:,n)/SUM(areal_mfstd_init(i,j,:,n))
+                        end if
+        
+                        d_an_latg(i,j,n) = c0
+                                            
+                        do k=1,nfsd ! sum over k
+                            d_an_latg(i,j,n) = d_an_latg(i,j,n) + (c2/floe_rad_c(k))*aicen(i,j,n)* &
+                            areal_mfstd_init(i,j,k,n)*G_radial(i,j)*dt
+                        end do
+
+                        if (d_an_latg(i,j,n).lt.c0) stop 'delta itd lt0, lg'
+                    end do ! n 
+                                    
+                    if (SUM(d_an_latg(i,j,:)).ge.lead_area(i,j)) stop &
+                                             'Filled up lead region'
+
+
+                endif ! vi0new_lat > 0
+                ! otherwise d_an_latg stays zero
+
+                !----- Now use remaining ice volume as in standard model, but ice
+                ! cannot grow into the area that has grown laterally
+
+                vi0new(ij) = vi0new(ij) - vi0new_lat(ij)
+                if (vi0new(ij).lt.c0) stop 'neg vol'
+                if (vi0new(ij).gt.vi0_init(ij)) stop 'increased vol'
+
+                if (lead_area(i,j).gt.aice0(i,j)) stop &
+                             'leadarewrong'
+
+                !-----Now distribute ice
+
+                amount_taken = SUM(d_an_latg(i,j,:))  
+                
+            else ! tr_fsd
+
+                amount_taken = c0
+
+            end if ! tr_fsd
+
             ! new ice area and thickness
             ! hin_max(0) < new ice thickness < hin_max(1)
-            if (aice0(i,j) > puny) then
-               hi0new = max(vi0new(ij)/aice0(i,j), hfrazilmin)
-               if (hi0new > hi0max .and. aice0(i,j)+puny < c1) then
+            if ((aice0(i,j)-amount_taken) > puny) then
+               hi0new = max(vi0new(ij)/(aice0(i,j)-amount_taken), hfrazilmin)
+               if (hi0new > hi0max .and. (aice0(i,j)-amount_taken)+puny < c1) then
                   ! distribute excess volume over all categories (below)
+                  if (aice(i,j).eq.c0) stop 'aice 0'
                   hi0new = hi0max
-                  ai0new(ij) = aice0(i,j)
+                  ai0new(ij) = (aice0(i,j) - amount_taken)
                   vsurp      = vi0new(ij) - ai0new(ij)*hi0new
                   hsurp(ij)  = vsurp / aice(i,j)
                   vi0new(ij) = ai0new(ij)*hi0new
@@ -1810,16 +1963,43 @@
                hsurp(ij) = vi0new(ij)/aice(i,j) ! new thickness in each cat
                vi0new(ij) = c0
             endif               ! aice0 > puny
-         endif                  ! vi0new > puny
+ 
+            !-----Combine things
 
-      !-----------------------------------------------------------------
-      ! Identify grid cells receiving new ice.
-      !-----------------------------------------------------------------
+            ! diagnostics
+            d_an_addnew(i,j,1) = ai0new(ij)
+
+            ! volume added to each from lateral growth only
+            vin0new(ij,:) = c0
+            do n=1,ncat
+                if (aicen(i,j,n).gt.c0) &
+                     vin0new(ij,n) = d_an_latg(i,j,n) * vicen(i,j,n)/aicen(i,j,n)
+            end do
+
+            ! altogether
+            d_an_tot(i,j,2:ncat) = d_an_latg(i,j,2:ncat)
+            d_an_tot(i,j,1) = d_an_latg(i,j,1) + d_an_addnew(i,j,1)
+            vin0new(ij,1) = vin0new(ij,1) +ai0new(ij)*hi0new 
+               
+            if (SUM(d_an_tot(i,j,:)).gt.(puny+aice0(i,j))) stop &
+                'too much d_an_tot'
+
+            if (ANY(d_an_tot(i,j,:).lt.-puny)) stop &
+                'neg d_an_tot'
+                 
+            if ((SUM(vin0new(ij,:)).le.c0).and.(hsurp(ij).le.c0)) stop &
+                'no ice growth'
+
+         endif  ! vi0new > puny
+
+         !-----------------------------------------------------------------
+         ! Identify grid cells receiving new ice.
+         !-----------------------------------------------------------------
 
          i = indxi(ij)
          j = indxj(ij)
 
-         if (vi0new(ij) > c0) then  ! add ice to category 1
+         if (SUM(vin0new(ij,:)) > c0) then  ! area growth in all categories 
             jcells = jcells + 1
             indxi2(jcells) = i
             indxj2(jcells) = j
@@ -1906,7 +2086,7 @@
                endif
             enddo               ! ij
 
-         else
+         else ! ktherm
 
             do k = 1, nilyr
 !DIR$ CONCURRENT !Cray
@@ -1936,11 +2116,13 @@
       enddo                     ! n
 
       !-----------------------------------------------------------------
-      ! Combine new ice grown in open water with category 1 ice.
+      ! Combine new ice grown in open water with category n ice.
       ! Assume that vsnon and esnon are unchanged.
       ! The mushy formulation assumes salt from frazil is added uniformly
       ! to category 1, while the others use a salinity profile.
       !-----------------------------------------------------------------
+
+      do n = 1,ncat
 
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
@@ -1949,57 +2131,214 @@
          i = indxi2(ij)
          j = indxj2(ij)
          m = indxij2(ij)
+         
+         if ((d_an_tot(i,j,n).gt.c0).and.(vin0new(m,n).gt.c0)) then
 
-         area1        = aicen(i,j,1)   ! save
-         vice1(ij)    = vicen(i,j,1)   ! save
-         aicen(i,j,1) = aicen(i,j,1) + ai0new(m)
-         aice0(i,j)   = aice0(i,j)   - ai0new(m)
-         vicen(i,j,1) = vicen(i,j,1) + vi0new(m)
+         area1        = aicen(i,j,n)   ! save
+         vice1(ij)    = vicen(i,j,n)   ! save
+         aicen(i,j,n) = aicen(i,j,n) + d_an_tot(i,j,n)
+         aice0(i,j)   = aice0(i,j)   - d_an_tot(i,j,n)
+         vicen(i,j,n) = vicen(i,j,n) + vin0new(m,n)
 
-         trcrn(i,j,nt_Tsfc,1) = &
-            (trcrn(i,j,nt_Tsfc,1)*area1 + Tf(i,j)*ai0new(m))/aicen(i,j,1)
-         trcrn(i,j,nt_Tsfc,1) = min (trcrn(i,j,nt_Tsfc,1), c0)
+         if (aicen(i,j,n).gt.c0) trcrn(i,j,nt_Tsfc,n) = &
+            (trcrn(i,j,nt_Tsfc,n)*area1 + Tf(i,j)*d_an_tot(i,j,n))/aicen(i,j,n)
+         trcrn(i,j,nt_Tsfc,n) = min (trcrn(i,j,nt_Tsfc,n), c0)
+
+        ! LR sanity checks
+         if ((aicen(i,j,n).eq.c0).and.(vicen(i,j,n).gt.puny)) stop &
+            'aicen zero, vicen nonzero after update'
+
+         if ((aicen(i,j,n).ne.aicen(i,j,n)).or.(vicen(i,j,n).ne.vicen(i,j,n))) stop &
+            'aicen or vicen NaN after update in ani'
 
          if (tr_FY) then
-            trcrn(i,j,nt_FY,1) = &
-           (trcrn(i,j,nt_FY,1)*area1 + ai0new(m))/aicen(i,j,1)
-            trcrn(i,j,nt_FY,1) = min(trcrn(i,j,nt_FY,1), c1)
+            if (aicen(i,j,n).gt.c0) trcrn(i,j,nt_FY,n) = &
+           (trcrn(i,j,nt_FY,n)*area1 + d_an_tot(i,j,n))/aicen(i,j,n)
+            trcrn(i,j,nt_FY,n) = min(trcrn(i,j,nt_FY,n), c1)
          endif
 
-         if (vicen(i,j,1) > puny) then
-            if (tr_iage) &
-               trcrn(i,j,nt_iage,1) = &
-              (trcrn(i,j,nt_iage,1)*vice1(ij) + dt*vi0new(m))/vicen(i,j,1)
+         if (tr_fsd) then
+         !---- Evolve mFSTD according to lateral growth
+         !  and growth of new ice (in first category)
+                                
+         if (d_an_latg(i,j,n).gt.puny) then ! lateral growth
+
+            ! area after lateral growth and
+            ! before new ice formation
+            area2(i,j,n) = aicen_init(i,j,n) + d_an_latg(i,j,n)
+
+            fin_diff(:) = c0 ! NB could stay zero if all in largest FS cat
+            f_flx(:) = c0
+            do k = 2, nfsd!+1
+                f_flx(k) = G_radial(i,j) * areal_mfstd_init(i,j,k-1,n) / &
+                                                    floe_binwidth(k-1)
+            end do
+            do k = 1, nfsd
+                fin_diff(k) = f_flx(k+1) - f_flx(k)
+            end do
+                                   
+            if (ABS(SUM(fin_diff(:))).gt.puny) stop &
+                'sum fnk diff not zero in lg'
+
+            areal_mfstd_latg(i,j,:,n) = c0       
+            do k = 1,nfsd
+                areal_mfstd_latg(i,j,k,n) = &
+                    areal_mfstd_init(i,j,k,n) +   &
+                    dt * (  - fin_diff(k) + &
+                    c2 * G_radial(i,j) * areal_mfstd_init(i,j,k,n) * &
+                    (c1/floe_rad_c(k) - & 
+                    SUM(areal_mfstd_init(i,j,:,n)/floe_rad_c(:))) )
+            end do
+                                        
+            if (ABS(SUM(areal_mfstd_init(i,j,:,n))-c1).gt.puny) stop &
+                'init mFSTD not normed, lg' 
+         
+            if (ABS(SUM(areal_mfstd_latg(i,j,:,n))-c1).gt.puny) stop &
+                'mFSTD not normed, lg' 
+
+            ! just in case (may be errors < 1e-11)
+            areal_mfstd_latg(i,j,:,n) = areal_mfstd_latg(i,j,:,n)/SUM(areal_mfstd_latg(i,j,:,n))
+
+            if (ANY(areal_mfstd_latg(i,j,:,n).lt.c0)) stop &
+                'neg mFSTD, lg'
+
+            trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n) = areal_mfstd_latg(i,j,:,n)
+ 
+            d_amfstd_latg(i,j,:,n) = & 
+                areal_mfstd_latg(i,j,:,n)-  areal_mfstd_init(i,j,:,n)
+
+         else
+             areal_mfstd_latg(i,j,:,n) = areal_mfstd_init(i,j,:,n) 
+         end if ! lat growth
+                                
+         if (n.eq.1) then
+            ! add new frazil ice to smallest thickness 
+            if (d_an_addnew(i,j,n).gt.puny) then   
+                                     
+                    if (d_an_addnew(i,j,n).gt.aicen(i,j,n)) stop &
+                    'area update neg somewhere'      
+
+                    areal_mfstd_ni(:) = c0
+                
+                    if (SUM(areal_mfstd_latg(i,j,:,n)).gt.puny) then ! FSD exists
+
+                        if (new_ice_fs.eq.0) then
+                            ! grow in smallest
+                            areal_mfstd_ni(1) =  (area2(i,j,n) * areal_mfstd_latg(i,j,1,n) + &
+                                ai0new(m))/(area2(i,j,n)+ai0new(m))                                                        
+
+                            do k=2,nfsd  ! diminish other floe cats accordingly
+                                areal_mfstd_ni(k) = areal_mfstd_latg(i,j,k,n) * &
+                                    area2(i,j,n)/(area2(i,j,n)+ai0new(m))
+                            enddo 
+
+                        else if (new_ice_fs.eq.1) then
+                            ! grow in largest
+                            areal_mfstd_ni(nfsd) =  (area2(i,j,n) * areal_mfstd_latg(i,j,nfsd,n) + &
+                                ai0new(m))/(area2(i,j,n)+ai0new(m))
+
+                            do k=1,nfsd-1  ! diminish other floe cats accordingly
+                                areal_mfstd_ni(k) = areal_mfstd_latg(i,j,k,n) * &
+                                    area2(i,j,n)/(area2(i,j,n)+ai0new(m))
+                            end do
+
+                        else if (new_ice_fs.ge.2) then
+                            if (new_ice_fs.eq.2) new_size = nfsd
+                            if (new_ice_fs.eq.3) call wave_dep_growth(wave_spectrum(i,j,:), wave_hs_in_ice(i,j), new_size)
+
+                            ! grow in new_size
+                            areal_mfstd_ni(new_size) =  (area2(i,j,n) * areal_mfstd_latg(i,j,new_size,n) + &
+                                ai0new(m))/(area2(i,j,n)+ai0new(m))
+
+                            do k=1,new_size-1  ! diminish other floe cats accordingly
+                                areal_mfstd_ni(k) = areal_mfstd_latg(i,j,k,n) * &
+                                    area2(i,j,n)/(area2(i,j,n)+ai0new(m))
+                            end do
+
+                            do k=new_size+1,nfsd  ! diminish other floe cats accordingly
+                                areal_mfstd_ni(k) = areal_mfstd_latg(i,j,k,n) * &
+                                    area2(i,j,n)/(area2(i,j,n)+ai0new(m))
+                            end do
+
+                        end if ! new_fs_option
+
+                    else ! entirely new ice or not
+                    
+                        if (new_ice_fs.eq.0) then
+                            areal_mfstd_ni(1) = c1
+                        else if (new_ice_fs.eq.1) then
+                            areal_mfstd_ni(nfsd) = c1
+                        else if (new_ice_fs.eq.2) then
+                            areal_mfstd_ni(nfsd) = c1
+                        else if (new_ice_fs.eq.3) then
+                            call wave_dep_growth(wave_spectrum(i,j,:), wave_hs_in_ice(i,j), new_size)
+                            areal_mfstd_ni(new_size) = c1
+                        end if      ! new ice fs
+
+                    end if ! entirely new ice or not
+
+                    if (ABS(SUM(areal_mfstd_ni)-c1).gt.puny) then
+                        print *, 'areal_mfstd_ni',areal_mfstd_ni
+                        print *, ABS(SUM(areal_mfstd_ni)-c1)
+                        print *, 'mFSTD not normed, ni'
+                    end if 
+                    
+                    areal_mfstd_ni = areal_mfstd_ni / SUM(areal_mfstd_ni)
+
+                    if (ANY(areal_mfstd_ni.lt.c0)) stop &
+                        'neg mFSTD, ni'
+
+                    ! finally, update FSD
+                    trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n) = areal_mfstd_ni
+
+                    if (SUM(trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n)).lt.puny) stop 'should not be punyy'  
+
+                    ! for diagnostics
+                    d_amfstd_addnew(i,j,:,n) = &
+                        trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n) -  areal_mfstd_latg(i,j,:,n)
+                                       
+                    if (ANY(trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n).gt.c1+puny)) stop  &
+                        'mFSTD > 1 in ani'
+
+            end if ! d_an_addnew > puny
+
+         endif ! n=1
+         end if ! tr_fsd
+
+         if (vicen(i,j,n) > puny) then
+            if (tr_iage) trcrn(i,j,nt_iage,n) = &
+                (trcrn(i,j,nt_iage,n)*vice1(ij) + dt*vin0new(m,n))/vicen(i,j,n)
 
             if (tr_aero) then
                do it = 1, n_aero
-                  trcrn(i,j,nt_aero+2+4*(it-1),1) = &
-                  trcrn(i,j,nt_aero+2+4*(it-1),1)*vice1(ij)/vicen(i,j,1)
-                  trcrn(i,j,nt_aero+3+4*(it-1),1) = &
-                  trcrn(i,j,nt_aero+3+4*(it-1),1)*vice1(ij)/vicen(i,j,1)
+                  trcrn(i,j,nt_aero+2+4*(it-1),n) = &
+                  trcrn(i,j,nt_aero+2+4*(it-1),n)*vice1(ij)/vicen(i,j,n)
+                  trcrn(i,j,nt_aero+3+4*(it-1),n) = &
+                  trcrn(i,j,nt_aero+3+4*(it-1),n)*vice1(ij)/vicen(i,j,n)
                enddo
             endif
 
             if (tr_lvl) then
-                alvl = trcrn(i,j,nt_alvl,1)
-                trcrn(i,j,nt_alvl,1) = &
-               (trcrn(i,j,nt_alvl,1)*area1 + ai0new(m))/aicen(i,j,1)
-                trcrn(i,j,nt_vlvl,1) = &
-               (trcrn(i,j,nt_vlvl,1)*vice1(ij) + vi0new(m))/vicen(i,j,1)
+                alvl = trcrn(i,j,nt_alvl,n)
+                trcrn(i,j,nt_alvl,n) = &
+               (trcrn(i,j,nt_alvl,n)*area1 + d_an_tot(i,j,n))/aicen(i,j,n)
+                trcrn(i,j,nt_vlvl,n) = &
+               (trcrn(i,j,nt_vlvl,n)*vice1(ij) + vin0new(m,n))/vicen(i,j,n)
             endif
 
             if (tr_pond_cesm .or. tr_pond_topo) then
-               trcrn(i,j,nt_apnd,1) = &
-               trcrn(i,j,nt_apnd,1)*area1/aicen(i,j,1)
+               trcrn(i,j,nt_apnd,n) = &
+               trcrn(i,j,nt_apnd,n)*area1/aicen(i,j,n)
             elseif (tr_pond_lvl) then
-               if (trcrn(i,j,nt_alvl,1) > puny) then
-                  trcrn(i,j,nt_apnd,1) = &
-                  trcrn(i,j,nt_apnd,1) * alvl*area1 &
-                                       / (trcrn(i,j,nt_alvl,1)*aicen(i,j,1))
+               if (trcrn(i,j,nt_alvl,n) > puny) then
+                  trcrn(i,j,nt_apnd,n) = &
+                  trcrn(i,j,nt_apnd,n) * alvl*area1 &
+                                       / (trcrn(i,j,nt_alvl,n)*aicen(i,j,n))
                endif
-            endif
-         endif
+            endif ! tr_pond
+         endif ! vicen>puny
 
+         endif ! extra condition - remove?
       enddo                     ! ij
 
       do k = 1, nilyr
@@ -2011,19 +2350,23 @@
             j = indxj2(ij)
             m = indxij2(ij)
                
-            if (vicen(i,j,1) > c0) then
+            if ((vin0new(m,n).gt.c0).and.(d_an_tot(i,j,n).gt.c0) ) then
+            if (vicen(i,j,n) > c0) then
                ! factor of nilyr cancels out
                ! enthalpy
-               trcrn(i,j,nt_qice+k-1,1) = &
-              (trcrn(i,j,nt_qice+k-1,1)*vice1(ij) &
-                                       + qi0new(m)*vi0new(m))/vicen(i,j,1)
+               trcrn(i,j,nt_qice+k-1,n) = &
+              (trcrn(i,j,nt_qice+k-1,n)*vice1(ij) &
+                                       + qi0new(m)*vin0new(m,n))/vicen(i,j,n)
                ! salinity
-               trcrn(i,j,nt_sice+k-1,1) = &
-              (trcrn(i,j,nt_sice+k-1,1)*vice1(ij) &
-                                   + Sprofile(m,k)*vi0new(m))/vicen(i,j,1)
+               trcrn(i,j,nt_sice+k-1,n) = &
+              (trcrn(i,j,nt_sice+k-1,n)*vice1(ij) &
+                                   + Sprofile(m,k)*vin0new(m,n))/vicen(i,j,n)
             endif
-         enddo
-      enddo
+            end if
+         enddo ! ij
+      enddo ! k
+
+    enddo !n
 
       if (l_conservation_check) then
 
@@ -2039,6 +2382,47 @@
       enddo
       enddo
       enddo
+
+! LR
+    ! sanity
+    do n = 1,ncat
+        do ij = 1, jcells
+            i = indxi2(ij)
+            j = indxj2(ij)
+            if (aicen(i,j,n).gt.puny) then
+                if (ABS(SUM(trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n))-c1).gt.puny) then 
+                    print *, SUM(trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n))
+                    print *, ABS(SUM(trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n))-c1)
+                    print *, trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n)
+                    print *, 'n= ',n
+                    print *, vi0new(ij), vi0new_lat(ij)
+                    print *, d_amfstd_latg(i,j,:,n)
+                    print *, d_amfstd_addnew(i,j,:,n)
+                    print *, 'd an ',d_an_tot(i,j,n), d_an_latg(i,j,n), d_an_addnew(i,j,n)
+                    print *, 'WARNING not norm after growth'
+                end if
+            else
+                trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n) = c0
+            end if
+        end do ! ij
+        end do ! n
+
+        ! diagnostics
+        do k=1,nfsd
+            d_afsd_latg(:,:,k) = c0
+            d_afsd_addnew(:,:,k) = c0
+            do n=1,ncat
+                d_afsd_latg(:,:,k) = d_afsd_latg(:,:,k)  + &
+                    (aicen_init(:,:,n)+d_an_latg(:,:,n))*areal_mfstd_latg(:,:,k,n) - &
+                     aicen_init(:,:,n)*areal_mfstd_init(:,:,k,n)
+
+                d_afsd_addnew(:,:,k) = d_afsd_addnew(:,:,k)  + &
+                    aicen(:,:,n)*trcrn(:,:,nt_fsd+k-1,n) - &
+                   (aicen_init(:,:,n)+d_an_latg(:,:,n))*areal_mfstd_latg(:,:,k,n)
+ 
+            end do ! n
+        end do ! k
+!----------------------
 
       call column_sum (nx_block, ny_block,       &
                        icells,   indxi,   indxj, &
@@ -2086,6 +2470,11 @@
                            l_stop,     istop,      jstop)
 
       end subroutine add_new_ice
+
+
+
+
+
 
 !=======================================================================
 

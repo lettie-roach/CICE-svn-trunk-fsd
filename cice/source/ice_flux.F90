@@ -312,11 +312,11 @@
          fbottom, &     ! flux that goes to bottom melt (W/m^2)
          flateral
 
-      real (kind=dbl_kind), dimension (:,:,:,:), allocatable,  public :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,25,max_blocks), public :: &
           wave_spectrum     ! wave spectrum in 25 frequencies - e(f) from Wavewatch
                             ! power spectral density of surface elevation (m^2 s)
 
-     real (kind=dbl_kind), dimension (:), allocatable,  public :: &
+     real (kind=dbl_kind), dimension (25), public :: &
           freq, dfreq        ! freqency values and binwidths
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public :: &

@@ -782,7 +782,6 @@
                           lead_area, latsurf_area, vlateral, &
                           sst, Tf, &
                           G_radial, wave_spectrum, wave_hs_in_ice                
-       use ice_fsd_thermo, only: add_new_ice_lat
        use ice_fsd, only:renorm_mfstd, &
                          partition_area, &
                          floe_merge_thermo, &
@@ -940,8 +939,7 @@
          call ice_timer_start(timer_addnewice, iblk)
 
          ! Thermodynamics as Horvat & Tziperman (2015)
-         if (tr_fsd) then
-        
+         if (tr_fsd) &
               ! calculate various areas required to partition fluxes
                call partition_area (nx_block, ny_block,                &
                                         ilo, ihi, jlo, jhi,             &
@@ -953,7 +951,7 @@
                                         lead_area(:,:,iblk),            &
                                         latsurf_area(:,:,iblk)          )
 
-               call add_new_ice_lat (nx_block,  ny_block,     &
+         call add_new_ice (nx_block,  ny_block,     &
                            ntrcr,     icells,               &
                            indxi,     indxj,                &
                            dt,       lead_area(:,:,iblk),   &
@@ -990,40 +988,7 @@
                            wave_spectrum(:,:,:,iblk),       &
                            wave_hs_in_ice(:,:,iblk) )        
          
-         else
-                 ! no lateral growth
-                 d_an_latg(:,:,:,iblk) = c0 
-                 aicen_save = aicen(:,:,:,iblk)
-
-                 call add_new_ice (nx_block,      ny_block, &
-                           ntrcr,                 icells,   &
-                           indxi,                 indxj,    &
-                           dt,                              &
-                           aicen     (:,:,:,iblk),          &
-                           trcrn     (:,:,1:ntrcr,:,iblk),  &
-                           vicen     (:,:,:,iblk),          &
-                           aice0     (:,:,  iblk),          &
-                           aice      (:,:,  iblk),          &
-                           frzmlt    (:,:,  iblk),          &
-                           frazil    (:,:,  iblk),          &
-                           frz_onset (:,:,  iblk), yday,    &
-                           update_ocn_f,                    &
-                           fresh     (:,:,  iblk),          &
-                           fsalt     (:,:,  iblk),          &
-                           Tf        (:,:,  iblk),          &
-                           sss       (:,:,  iblk),          &
-                           salinz    (:,:,:,iblk),          &
-                           phi_init, dSin0_frazil,          &
-                           nbtrcr,                          &
-                           flux_bio  (:,:,1:nbtrcr,iblk),   &
-                           ocean_bio (:,:,1:nbtrcr,iblk),   &
-                           l_stop,                          &
-                           istop                 , jstop)
-
-                 d_an_addnew(:,:,:,iblk) =  &
-                        aicen(:,:,:,iblk) - aicen_save
-         end if 
-         
+                 
          call ice_timer_stop(timer_addnewice, iblk)
 
 ! LR
