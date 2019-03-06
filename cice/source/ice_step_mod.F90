@@ -784,7 +784,7 @@
                           G_radial, wave_spectrum, wave_hs_in_ice                
        use ice_fsd, only:renorm_mfstd, &
                          partition_area, &
-                         floe_merge_thermo, &
+                         icepack_mergefsd, &
                          d_afsd_latg, d_amfstd_latg, d_an_latg, &
                          d_afsd_addnew, d_amfstd_addnew, d_an_addnew, &
                          d_afsd_latm, d_amfstd_latm, d_an_latm, &
@@ -1054,16 +1054,14 @@
 
         if (tr_fsd) then        
 
-                call floe_merge_thermo(iblk,nx_block,  ny_block, &
-                           ntrcr,                 icells,   &
-                           indxi,                 indxj,    &
-                           dt, &
-                           aice      (:,:,  iblk),          &
-                           aicen     (:,:,:,iblk),          &
-                           frzmlt    (:,:,  iblk),          &
+                call icepack_mergefsd (                 &
+                           iblk, nx_block, ny_block,    &
+                           icells, indxi, indxj,        &
+                           dt, aicen (:,:,:,iblk),      &
+                           frzmlt    (:,:,  iblk),      &
                            trcrn     (:,:,nt_fsd:nt_fsd+nfsd-1,:,iblk),&
-                           d_amfstd_merge(:,:,:,:,iblk),    &
-                           d_afsd_merge(:,:,:,iblk) )  
+                           d_afsd_merge(:,:,:,iblk), &
+                           d_amfstd_merge(:,:,:,:,iblk) )  
 
        
         end if  

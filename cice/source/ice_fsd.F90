@@ -24,7 +24,7 @@
       public :: init_fsd, init_fsd_bounds,     &
           write_restart_fsd, read_restart_fsd, &
           renorm_mfstd, wave_dep_growth, partition_area, &
-          floe_merge_thermo
+          icepack_mergefsd 
 
       logical (kind=log_kind), public :: & 
          restart_fsd      ! if .true., read fsd tracer restart file
@@ -134,6 +134,13 @@
                          5.24122136e+01,   8.78691405e+01,   1.39518470e+02,   2.11635752e+02, &
                          3.08037274e+02,   4.31203059e+02,   5.81277225e+02,   7.55141047e+02, &
                          9.45812834e+02/)
+ 
+        else if (nfsd.eq.6) then
+
+            allocate(lims(6+1))
+
+            lims =   (/  6.65000000e-02,   5.31030847e+00,   1.42865861e+01,   2.90576686e+01, &
+                         5.24122136e+01,   8.78691405e+01,   1.39518470e+02 /)
  
         else
 
@@ -577,21 +584,18 @@
        end do !j
 
               end subroutine partition_area
-
 !=======================================================================
 
-        subroutine floe_merge_thermo(iblk,nx_block, ny_block, &
-                                    ntrcr, icells, indxi, indxj, & 
-                                    dt, &
-                                    aice, aicen, frzmlt, areal_mfstd, &
-                                    d_amfstd_merge, d_afsd_merge)
-
-                       
+      subroutine icepack_mergefsd ( &
+                               iblk, nx_block, ny_block, &
+                               icells, indxi, indxj,     & 
+                               dt, aicen, frzmlt,        &
+                               trcrn,                    &
+                               d_afsd_merge, d_amfstd_merge)
 
       integer (kind=int_kind), intent(in) :: &
          iblk, &
          nx_block, ny_block, & ! block dimensions
-         ntrcr             , & ! number of tracers in use
          icells                ! number of ice/ocean grid cells
 
       integer (kind=int_kind), dimension (nx_block*ny_block), &
@@ -606,12 +610,11 @@
          aicen   ! concentration of ice
  
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
-         aice  , & ! total concentration of ice
          frzmlt    ! freezing/melting potential (W/m^2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nfsd,ncat), &
          intent(inout) :: &
-         areal_mfstd, &
+         trcrn, &
          d_amfstd_merge
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nfsd), &
@@ -621,8 +624,60 @@
       ! local variables
 
       integer (kind=int_kind) :: &
+        ij, i, j
+
+      
+    do ij = 1, icells
+        
+        i = indxi(ij)
+        j = indxj(ij)
+
+        call floe_merge_thermo(dt, aicen(i,j,:),       & ! in
+                               frzmlt(i,j),            & ! in
+                               trcrn(i,j,:,:),         & ! inout
+                               d_afsd_merge(i,j,:),    & ! out
+                               d_amfstd_merge(i,j,:,:) ) ! out
+
+
+    end do!ij 
+
+    
+            end subroutine icepack_mergefsd
+
+
+!=======================================================================
+
+        subroutine floe_merge_thermo (dt, aicen, frzmlt, &
+                                      areal_mfstd,       &
+                                      d_afsd_merge,    &
+                                      d_amfstd_merge       )
+
+                       
+
+     real (kind=dbl_kind), intent(in) :: &
+         dt        ! time step (s)
+
+      real (kind=dbl_kind), dimension (ncat), &
+         intent(in) :: &
+         aicen   ! concentration of ice
+ 
+      real (kind=dbl_kind), intent(in) :: &
+         frzmlt    ! freezing/melting potential (W/m^2)
+
+      real (kind=dbl_kind), dimension (nfsd,ncat), &
+         intent(inout) :: &
+         areal_mfstd, &
+         d_amfstd_merge
+
+      real (kind=dbl_kind), dimension (nfsd), &
+         intent(inout) :: &
+         d_afsd_merge
+
+      ! local variables
+
+      integer (kind=int_kind) :: &
         t, &
-        i, j, n, k, ij, m, &
+        n, k, m, &
         kx, ky, kz, a
 
       real (kind=dbl_kind), dimension(nfsd) :: &
@@ -640,120 +695,116 @@
                         ! stability condition for Smol. eqn.
 
 
+  
+    do n = 1, ncat
+                    
+                
+        d_afsd_merge(:) = c0
+        d_amfstd_merge(:,n) = c0
       
-        do ij = 1, icells
-            do n=1,ncat
-          
-                        i = indxi(ij)
-                        j = indxj(ij)
- 
-                        
-                        d_afsd_merge(i,j,:) = c0
-                        d_amfstd_merge(i,j,:,n) = c0
-        
-                      
-                        !-----------------------------------------------------------------
-                        ! If there is some ice in the lower (nfsd-1) categories
-                        ! and there is freezing potential
-                        !-----------------------------------------------------------------
-                        if ((frzmlt(i,j).gt.puny).and.(aicen(i,j,n).gt.p1).and.(SUM(areal_mfstd(i,j,:nfsd-1,n)).gt.puny)) then
+        ! If there is some ice in the lower (nfsd-1) categories
+        ! and there is freezing potential
+        if ((frzmlt.gt.puny).and. & ! if freezing potential
+            (aicen(n).gt.p1).and.  & ! skip low concentrations (unlikely to merge)
+            (SUM(areal_mfstd(:nfsd-1,n)).gt.puny)) then ! some ice in lower (nfsd-1) categories
 
-                               ! time step limitations for merging
-                                stability = dt * c_mrg * aicen(i,j,n) * area_scaled_h(nfsd)
-                                ndt_mrg = NINT(stability+p5) ! add .5 to round up                        
-                                subdt = dt/FLOAT(ndt_mrg)
- 
-                                amfstd_init(:) = areal_mfstd(i,j,:,n)
-                                amfstd_tmp = amfstd_init
+            ! time step limitations for merging
+            stability = dt * c_mrg * aicen(n) * area_scaled_h(nfsd)
+            ndt_mrg = NINT(stability+p5) ! add .5 to round up                        
+            subdt = dt/FLOAT(ndt_mrg)
 
-                                if (ABS(SUM(amfstd_init) - c1).gt.puny) stop 'not 1 b4 mrg'
-                                if (ANY(amfstd_init.lt.c0-puny)) stop &
-                                 'negative mFSTD b4 mrg'
-                                if (ANY(amfstd_init.gt.c1+puny)) stop &
-                                 'mFSTD>1 b4 mrg'
+            amfstd_init(:) = areal_mfstd(:,n)
+            amfstd_tmp = amfstd_init
 
-                                area_loss_mcat = c0
-                                do t = 1, ndt_mrg
-                                     do kx = 1, nfsd
+            ! sanity checks
+            if (ABS(SUM(amfstd_init) - c1).gt.puny) stop 'not 1 b4 mrg'
+            if (ANY(amfstd_init.lt.c0-puny)) stop &
+                 'negative mFSTD b4 mrg'
+            if (ANY(amfstd_init.gt.c1+puny)) stop &
+                 'mFSTD>1 b4 mrg'
 
-                                         coag_pos(kx) = c0
-                                         do ky = 1, kx
-                                             a = alpha_mrg(kx,ky)
-                                             coag_pos(kx) = coag_pos(kx) + &
-                                                            area_scaled_c(ky) * amfstd_tmp(ky) * aicen(i,j,n) * ( &
-                                                            SUM(amfstd_tmp(a:nfsd)) + &
-                                                            (amfstd_tmp(a-1)/area_scaled_binwidth(a-1)) * ( &
-                                                            area_scaled_h(a-1) - area_scaled_h(kx) + area_scaled_c(ky) ))
-       
-                                         end do
-                                     end do
+            area_loss_mcat = c0
+            do t = 1, ndt_mrg
+                do kx = 1, nfsd
 
-                                     coag_neg(1) = c0 ! cannot gain in smallest cat
-                                     coag_neg(2:nfsd) = coag_pos(1:nfsd-1)
+                coag_pos(kx) = c0
+                do ky = 1, kx
+                    a = alpha_mrg(kx,ky)
+                    coag_pos(kx) = coag_pos(kx) + &
+                        area_scaled_c(ky) * amfstd_tmp(ky) * aicen(n) * ( &
+                        SUM(amfstd_tmp(a:nfsd)) + &
+                       (amfstd_tmp(a-1)/area_scaled_binwidth(a-1)) * ( &
+                        area_scaled_h(a-1) - area_scaled_h(kx) + area_scaled_c(ky) ))
 
-                                     amfstd_tmp = amfstd_tmp - subdt*c_mrg*(coag_pos - coag_neg)
- 
-                                     if (ANY(amfstd_tmp.lt.c0-puny)) then
-                                            print *, 'amfstd_init ',amfstd_init
-                                            print *, 'coag_pos',coag_pos
-                                            print *, 'coag_neg',coag_neg
-                                            print *, 'amfstd_tmp ',amfstd_tmp
-                                            print *, &
-                                      'WARNING negative mFSTD mrg, l'
-                                     end if
+                end do ! ky
+                end do ! kx
 
+                coag_neg(1) = c0 ! cannot gain in smallest cat
+                coag_neg(2:nfsd) = coag_pos(1:nfsd-1)
 
-                                     if (ANY(amfstd_tmp.lt.c0-puny)) &
-                                            stop 'negative mFSTD mrg, l'
+                amfstd_tmp = amfstd_tmp - subdt*c_mrg*(coag_pos - coag_neg)
 
-                                     if (ANY(amfstd_tmp.gt.c1+puny)) &
-                                            stop ' mFSTD> 1 mrg, l'
+                ! sanity checks
+                 if (ANY(amfstd_tmp.lt.c0-puny)) then
+                        print *, 'amfstd_init ',amfstd_init
+                        print *, 'coag_pos',coag_pos
+                        print *, 'coag_neg',coag_neg
+                        print *, 'amfstd_tmp ',amfstd_tmp
+                        print *, &
+                  'WARNING negative mFSTD mrg, l'
+                 end if
 
-                                     if (ANY(dt*c_mrg*coag_pos.lt.-puny)) &
-                                         stop 'not positive'
+                 if (ANY(amfstd_tmp.lt.c0-puny)) &
+                        stop 'negative mFSTD mrg, l'
+                 if (ANY(amfstd_tmp.gt.c1+puny)) &
+                        stop ' mFSTD> 1 mrg, l'
+                 if (ANY(dt*c_mrg*coag_pos.lt.-puny)) &
+                     stop 'not positive'
 
-                                     area_loss_mcat = area_loss_mcat + subdt*c_mrg*coag_pos(nfsd)
+                 ! update
+                 area_loss_mcat = area_loss_mcat + subdt*c_mrg*coag_pos(nfsd)
 
-                                end do
-                                
-                                ! ignore loss in largest cat
-                                amfstd_tmp(nfsd) = amfstd_tmp(nfsd) + area_loss_mcat
+            end do ! time
+                
+            ! ignore loss in largest cat
+            amfstd_tmp(nfsd) = amfstd_tmp(nfsd) + area_loss_mcat
 
-                                area_loss = SUM(amfstd_init) - SUM(amfstd_tmp)
+            area_loss = SUM(amfstd_init) - SUM(amfstd_tmp)
 
-                                if (area_loss.lt.-puny) &
-                                    stop 'area gain'
+            ! more sanity checks
+            if (area_loss.lt.-puny) stop 'area gain'
+            if (ABS(area_loss).gt.puny) stop 'area change after correction'
+            
+            ! in case of small numerical errors
+            areal_mfstd(:,n) = amfstd_tmp/SUM(amfstd_tmp)
 
-                                if (ABS(area_loss).gt.puny) &
-                                    stop 'area change after correction'
-                                
-                                ! in case of small numerical errors
-                                areal_mfstd(i,j,:,n) = amfstd_tmp/SUM(amfstd_tmp)
+            ! sanity checks
+            if (ANY(areal_mfstd(:,n).lt.-puny)) stop 'neg, mrg'
 
-                                if (ANY(areal_mfstd(i,j,:,n).lt.-puny)) stop 'neg, mrg'
+            WHERE(areal_mfstd(:,n).lt.c0) areal_mfstd(:,n) = c0
+            
+            if (areal_mfstd(1,n).gt.amfstd_init(1)+puny) & 
+                stop 'gain in smallest cat'
 
-                                WHERE(areal_mfstd(i,j,:,n).lt.c0) areal_mfstd(i,j,:,n) = c0
-                                
-                                if (areal_mfstd(i,j,1,n).gt.amfstd_init(1)+puny) & 
-                                    stop 'gain in smallest cat'
+            ! diagnostic
+            d_amfstd_merge(:,n) = areal_mfstd(:,n) - amfstd_init
 
-                                d_amfstd_merge(i,j,:,n) = areal_mfstd(i,j,:,n) - amfstd_init
+        end if ! try to weld
 
-                        end if
-               end do !n
-     
-               do k=1,nfsd
-                    d_afsd_merge(i,j,k) = c0
-                    do n=1,ncat
-                        d_afsd_merge(i,j,k) = d_afsd_merge(i,j,k)  + &
-                        aicen(i,j,n)* d_amfstd_merge(i,j,k,n)
-                    end do
-               end do
+    end do !n
+    
+    ! diagnostics
+    do k = 1, nfsd
+        d_afsd_merge(k) = c0
+        do n = 1, ncat
+            d_afsd_merge(k) = d_afsd_merge(k)  + &
+            aicen(n)* d_amfstd_merge(k,n)
+        end do ! n
+    end do ! k
 
 
-        end do!ij 
 
-           end subroutine floe_merge_thermo
+       end subroutine floe_merge_thermo
 
 
 

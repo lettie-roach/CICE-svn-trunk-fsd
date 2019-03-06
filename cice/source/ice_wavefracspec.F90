@@ -141,6 +141,7 @@
          do j = jlo, jhi
          do i = ilo, ihi
 
+            d_afsd_wave(i,j,:,iblk) = c0
             ! LR this condition is FOR TESTING ONLY when using dummy wave spectrum
             ! do not use for actual runs!!
             if (aice(i,j,iblk).lt.0.8_dbl_kind) &
@@ -230,10 +231,11 @@
 
     !------------------------------------
 
-    ! initialize diagnostics
+    ! initialize 
     d_afsd_wave(:) = c0
     d_amfstd_wave(:,:) = c0
     wave_hs_in_ice = c0
+    fracture_hist(:) = c0
 
     ! sanity check
     if (ANY(trcrn(:,:).lt.c0)) stop 'neg b4-wb'
@@ -376,7 +378,7 @@
          spec_coeff, &
          phi, rand_array, summand
 
-     real (kind=dbl_kind), dimension(:), allocatable :: &
+     real (kind=dbl_kind), dimension(2*nx) :: &
          fraclengths
 
      real (kind=dbl_kind), dimension(nx) :: &
@@ -415,16 +417,19 @@
      spec_coeff = sqrt(c2*spec_elambda*dlambda)
      if (ANY(ISNAN(spec_coeff))) stop 'NaN spec_coeff' 
 
-     ! initialize array to hold fracture lengths
-     allocate(fraclengths(1))
-     fraclengths(1)=c0
+     ! initialize fracture lengths
+     fraclengths(:)=c0
      
      ! loop over n. realizations of SSH
      do i=1,loopcts
 
          ! random phase for each Fourier component
          ! varies in each j loop
-         call RANDOM_NUMBER(rand_array)
+         ! LR took out the call to random number
+         ! and set phase to constant
+         ! Constant phase should NOT BE USED for actual runs
+         rand_array(:) = p5
+         !!call RANDOM_NUMBER(rand_array)
          phi = c2*pi*rand_array
  
          do j=1,nx
@@ -438,7 +443,6 @@
          end if
      end do
  
-     if (SIZE(fraclengths).eq.1) e_stop = .true.
      if (ALL(fraclengths(:).eq.c0)) e_stop = .true.
 
      frachistogram(:)=c0
@@ -463,8 +467,6 @@
                 end do
      end if
  
-     deallocate(fraclengths)
-
      do k=1,nfsd
          frac_local(k)=floe_rad_c(k)*frachistogram(k)
      end do
@@ -491,8 +493,11 @@
         real (kind=dbl_kind), intent(in), dimension (nx) :: &
                 X, eta
  
-        real (kind=dbl_kind), intent(inout), dimension (:), allocatable :: &
-                fraclengths
+        real (kind=dbl_kind), intent(inout), dimension (2*nx) :: &
+                fraclengths  ! the biggest number of fraclengths we could have is
+                             ! two floe pieces created at each subgridpoint ie. 2*nx
+                             ! This will never actually happen - most of the array
+                             ! will be zeros
  
         logical (kind=log_kind), intent(inout) :: &
                 e_stop          ! if true, stop and return zero omega and fsdformed
@@ -540,7 +545,8 @@
        frac_size_two = c0
        j_neg = 0
        j_pos = 0      
- 
+       fraclengths(:) = c0
+
        ! search for local max and min within spacing of
        ! 10m on either side of each point
 
@@ -620,11 +626,8 @@
 
         n_above = COUNT(strain.gt.straincrit)
         if (n_above.gt.0) then
-                DEALLOCATE(fraclengths)
-                ALLOCATE(fraclengths(2*n_above))
-                fraclengths(1:n_above) = PACK(frac_size_one,(frac_size_one.gt.c0))
-                fraclengths(n_above+1:2*n_above) = &
-                        PACK(frac_size_two,(frac_size_two.gt.c0))
+                fraclengths(1:nx) = frac_size_one(:)
+                fraclengths(nx+1:2*nx) = frac_size_two(:)
 
                 e_stop = .false.
         else
