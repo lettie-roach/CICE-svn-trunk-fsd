@@ -1482,7 +1482,6 @@
                               ntrcr,     icells,     &
                               indxi,     indxj,      &
                               dt,                    &
-                              lead_area, latsurf_area, & ! LR
                               aicen,     trcrn,      &
                               vicen,                 &
                               aice0,     aice,       &
@@ -1517,7 +1516,7 @@
       use ice_zbgc_shared, only: skl_bgc
       use ice_fsd, only: floe_rad_c, floe_binwidth, &
                          wave_dep_growth, &
-                         new_ice_fs
+                         new_ice_fs, partition_area
       use ice_domain_size, only: nfsd, nfreq
 
       ! FSD
@@ -1550,8 +1549,6 @@
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
          tarea, &  ! grid cell area (m^2) ! plan to remove
-         lead_area, & ! fractional area of ice in lead region
-         latsurf_area, & ! fractional area of ice on sides of floes
          aice  , & ! total concentration of ice
          frzmlt, & ! freezing/melting potential (W/m^2)
          Tf    , & ! freezing temperature (C)
@@ -1691,6 +1688,8 @@
          areal_mfstd_ni      ! areal mFSTD after new ice added
 
       real (kind=dbl_kind) :: &
+         lead_area,    & ! the fractional area of the lead region
+         latsurf_area, & ! the area covered by lateral surface of floes
          totfrac, &      ! for FSD normalization
          amount_taken              
 
@@ -1882,10 +1881,13 @@
                 !--------LR - lateral growth of existing ice
                 ! partition volume into lateral growth and frazil
 
-                if (latsurf_area(i,j).gt.puny) then ! otherwise remains zero
-                    vi0new_lat(ij)=(vi0new(ij)*lead_area(i,j)) / &
-                                   (c1+(aice(i,j)/latsurf_area(i,j)))
-                end if
+                call partition_area( aice(i,j), aicen(i,j,:), vicen(i,j,:), &
+                                     trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,:), &
+                                     lead_area, latsurf_area)
+
+                if (latsurf_area.gt.puny) & ! otherwise remains zero
+                    vi0new_lat(ij)=(vi0new(ij)*lead_area) / &
+                                   (c1+(aice(i,j)/latsurf_area))
 
                 if (vi0new_lat(ij).lt.c0) stop 'latlt0'
                                                    
@@ -1922,7 +1924,7 @@
                         if (d_an_latg(i,j,n).lt.c0) stop 'delta itd lt0, lg'
                     end do ! n 
                                     
-                    if (SUM(d_an_latg(i,j,:)).ge.lead_area(i,j)) stop &
+                    if (SUM(d_an_latg(i,j,:)).ge.lead_area) stop &
                                              'Filled up lead region'
 
 
@@ -1936,7 +1938,7 @@
                 if (vi0new(ij).lt.c0) stop 'neg vol'
                 if (vi0new(ij).gt.vi0_init(ij)) stop 'increased vol'
 
-                if (lead_area(i,j).gt.aice0(i,j)) stop &
+                if (lead_area.gt.aice0(i,j)) stop &
                              'leadarewrong'
 
                 !-----Now distribute ice

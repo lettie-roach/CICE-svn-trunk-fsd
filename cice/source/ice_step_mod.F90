@@ -203,7 +203,7 @@
 ! LR CMB liuxy
       use ice_flux, only: fbottom, flateral
       use ice_domain_size, only: nfsd
-      use ice_fsd, only: renorm_mfstd
+      use ice_fsd, only: icepack_renormfsd
 ! LR CMB liuxy
 
 
@@ -331,8 +331,9 @@
               ! time evolution equations, but other changes eg. transport
               ! may result in it being not quite normalized) 
               ! not needed here any more as no longer use FSD in step therm1!
-              call renorm_mfstd (nx_block, ny_block,ncat,nfsd,aicen(:,:,:,iblk), &
-                               trcrn(:,:,:,:,iblk))
+              call icepack_renormfsd ( nx_block, ny_block, &
+                                       aicen(:,:,:,iblk), &
+                                       trcrn(:,:,:,:,iblk) )
 
         ! calculate heat fluxes (does not change ice)
         call frzmlt_bottom_lateral                               &
@@ -782,8 +783,7 @@
                           lead_area, latsurf_area, vlateral, &
                           sst, Tf, &
                           G_radial, wave_spectrum, wave_hs_in_ice                
-       use ice_fsd, only:renorm_mfstd, &
-                         partition_area, &
+       use ice_fsd, only:icepack_renormfsd, &
                          icepack_mergefsd, &
                          d_afsd_latg, d_amfstd_latg, d_an_latg, &
                          d_afsd_addnew, d_amfstd_addnew, d_an_addnew, &
@@ -935,24 +935,10 @@
 
          call ice_timer_start(timer_addnewice, iblk)
 
-         ! Thermodynamics as Horvat & Tziperman (2015)
-         if (tr_fsd) &
-              ! calculate various areas required to partition fluxes
-               call partition_area (nx_block, ny_block,                &
-                                        ilo, ihi, jlo, jhi,             &
-                                        ntrcr,                          &
-                                        aice(:,:,iblk),                 &
-                                        aicen(:,:,:,iblk),              &
-                                        vicen(:,:,:,iblk),              &
-                                        trcrn(:,:,1:ntrcr,:,iblk),      &
-                                        lead_area(:,:,iblk),            &
-                                        latsurf_area(:,:,iblk)          )
-
          call add_new_ice (nx_block,  ny_block,     &
                            ntrcr,     icells,               &
                            indxi,     indxj,                &
-                           dt,       lead_area(:,:,iblk),   &
-                           latsurf_area(:,:,iblk),          &
+                           dt,                              &
                            aicen     (:,:,:,iblk),          &
                            trcrn     (:,:,1:ntrcr,:,iblk),  &
                            vicen     (:,:,:,iblk),          &

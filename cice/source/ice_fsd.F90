@@ -23,7 +23,7 @@
       private
       public :: init_fsd, init_fsd_bounds,     &
           write_restart_fsd, read_restart_fsd, &
-          renorm_mfstd, wave_dep_growth, partition_area, &
+          icepack_renormfsd, wave_dep_growth, partition_area, &
           icepack_mergefsd 
 
       logical (kind=log_kind), public :: & 
@@ -325,21 +325,16 @@
 
 !=======================================================================
 !
-! Normalize the floe size distribution so it sums to one in cells with ice.
-! The FSD is zero is cells with no ice
+! Wrapper for renorm_mfstd
 !
-! Includes some sanity checks for negative numbers
-!
-      subroutine renorm_mfstd(nx_block,ny_block,ncat,nfsd,aicen,trcrn)
+      subroutine icepack_renormfsd ( nx_block, ny_block, &
+                                     aicen,    trcrn     )
 
-        use ice_constants, only: puny, c0, c1
         use ice_state, only: nt_fsd
         use ice_domain_size, only: max_ntrcr
 
         integer(kind=int_kind), intent(in) :: &
-             nx_block , &
-             ny_block , &
-             ncat, nfsd
+             nx_block , ny_block
 
         real (kind=dbl_kind), dimension (nx_block,ny_block,max_ntrcr,ncat), &  ! needs to be max_ntrcr here
              intent(inout) :: &
@@ -351,45 +346,73 @@
         ! local variables
 
         integer (kind=int_kind) :: &
-             n, &          ! ice thickness category index
-             i,j, k
+             i,j
 
 
         do j = 1,ny_block
         do i = 1,nx_block
-            do n=1,ncat
-
-                if (aicen(i,j,n).lt.c0) stop 'negative aice'
-                
-                if (ANY(trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n).lt.c0-1000*puny)) then
-                        print *, 'mFSTD ',trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n)
-                        print *, 'aicen ',aicen(i,j,n)
-			            stop 'negative mFSTD'
-                end if
-
-                ! tiny mFSTD set to zero
-                WHERE(trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n).lt.puny) &
-                        trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n) = c0        
- 
-                ! mFSTD is zero when there is no ice
-                if (aicen(i,j,n).le.puny) then 
-                        trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n) = c0
-                else
-                        if (SUM(trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n)).lt.puny) then
-                                print *, aicen(i,j,n)
-                                print *, trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n)
-                                print *, SUM(trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n))
-                                stop 'mFSTD zero for non-zero aicen'
-                        end if
-                        if (ABS(SUM(trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n))-c1).gt.c0) then
-                                !print *, 'renorm necessary (called renorm_mfstd)'
-                                trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n) = trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n) / SUM(trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,n))
-                        end if
-                end if
-
-            enddo !n
+        
+            call renorm_mfstd(aicen(i,j,:), trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,:))
+            
         enddo !i
         enddo !j
+
+      end subroutine icepack_renormfsd
+
+
+!=======================================================================
+!
+! Normalize the floe size distribution so it sums to one in cells with ice.
+! The FSD is zero is cells with no ice
+!
+! Includes some sanity checks for negative numbers
+!
+      subroutine renorm_mfstd(aicen,trcrn)
+
+
+        real (kind=dbl_kind), dimension (nfsd,ncat), &  ! needs to be max_ntrcr here
+             intent(inout) :: &
+             trcrn     ! tracer array
+
+        real(kind=dbl_kind), dimension(ncat), &
+             intent(in) :: aicen
+
+        ! local variables
+
+        integer (kind=int_kind) :: &
+             n  ! ice thickness category index
+
+
+        do n = 1,ncat
+
+            ! sanity checks
+            if (aicen(n).lt.c0) stop 'negative aice'
+                
+            if (ANY(trcrn(:,n).lt.c0-1000*puny)) then
+                print *, 'mFSTD ',trcrn(:,n)
+                print *, 'aicen ',aicen(n)
+                stop 'negative mFSTD'
+            end if
+
+            ! tiny mFSTD set to zero
+            WHERE(trcrn(:,n).lt.puny) trcrn(:,n) = c0        
+ 
+            ! mFSTD is zero when there is no ice
+            if (aicen(n).le.puny) then 
+                trcrn(:,n) = c0
+            else
+                if (SUM(trcrn(:,n)).lt.puny) then
+                    print *, aicen(n)
+                    print *, trcrn(:,n)
+                    print *, SUM(trcrn(:,n))
+                    stop 'mFSTD zero for non-zero aicen'
+                end if
+                if (ABS(SUM(trcrn(:,n))-c1).gt.c0) then
+                    trcrn(:,n) = trcrn(:,n) / SUM(trcrn(:,n))
+                end if
+            end if
+
+        enddo !n
 
       end subroutine renorm_mfstd
 
@@ -474,33 +497,23 @@
 !
 ! author: Lettie Roach, NIWA/VUW
 
-      subroutine partition_area (nx_block, ny_block, &
-                                        ilo, ihi, jlo, jhi, &
-                                        ntrcr,              &
-                                        aice,               &
-                                        aicen,    vicen,    &
-                                        trcrn,    lead_area,&
-                                        latsurf_area )
+      subroutine partition_area (        aice,     &
+                               aicen,    vicen,    &
+                               trcrn,    lead_area,&
+                               latsurf_area )
 
-      integer (kind=int_kind), intent(in) :: &
-         nx_block, ny_block, & ! block dimensions
-         ilo,ihi,jlo,jhi,    & ! beginning and end of physical domain
-         ntrcr                 ! number of tracers
-       
-      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) :: &
+      
+      real (kind=dbl_kind), intent(in) :: &
          aice        ! ice concentration
         
-      real (kind=dbl_kind), dimension(nx_block,ny_block,ncat), &
-         intent(in) :: &
+      real (kind=dbl_kind), dimension(ncat), intent(in) :: &
          aicen, &      ! fractional area of ice 
          vicen         ! volume per unit area of ice
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,ntrcr,ncat), & 
-         intent(in) :: &
+      real (kind=dbl_kind), dimension(nfsd,ncat), intent(in) :: &
          trcrn       ! tracer array
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block), &
-         intent(out) :: &
+      real (kind=dbl_kind), intent(out) :: &
           lead_area, &  ! the fractional area of the lead region
           latsurf_area  ! the area covered by lateral surface of floes
       
@@ -515,77 +528,63 @@
         width_leadreg, &   ! width of lead region
         thickness          ! actual thickness of ice in thickness cat
 
-      ! -----------------------------------------------------------------
-      ! Initialize
-      !-----------------------------------------------------------------
-       lead_area=c0
-       latsurf_area=c0
+    ! Initialize
+    lead_area=c0
+    latsurf_area=c0
 
-       ! Set the width of the lead region to be the smallest
-       ! floe size category, as per Horvat & Tziperman (2015)
-       width_leadreg=floe_rad_c(1)
+    ! Set the width of the lead region to be the smallest
+    ! floe size category, as per Horvat & Tziperman (2015)
+    width_leadreg=floe_rad_c(1)
       
-      !-----------------------------------------------------------------
-      ! Loop over all gridcells. Only calculate these areas where there
-      ! is some ice
-      !-----------------------------------------------------------------
+    if (aice.gt.puny) then
 
-       do j = jlo, jhi
-       do i = ilo, ihi
-      
-          lead_area(i,j) = c0
-          latsurf_area(i,j) = c0
-   
-          if (aice(i,j).gt.puny) then
-
-                ! lead area = sum of areas of annuli around all floes
-                do n=1,ncat       
-                        do k=1,nfsd
-                                lead_area(i,j) = lead_area(i,j) + &
-                                                 aicen(i,j,n) * trcrn(i,j,nt_fsd+k-1,n) * &
-                                                 ( c2*width_leadreg/floe_rad_c(k) + &
-                                                 width_leadreg**c2/floe_rad_c(k)**2)
-                        enddo !k
-                enddo !n
+        ! lead area = sum of areas of annuli around all floes
+        do n=1,ncat       
+            do k=1,nfsd
+                lead_area = lead_area + aicen(n) * trcrn(k,n) * &
+                          ( c2*width_leadreg/floe_rad_c(k) + &
+                            width_leadreg**c2/floe_rad_c(k)**2 )
+             enddo !k
+        enddo !n
        
-                ! cannot be greater than the open water fraction
-                lead_area(i,j)=MIN(lead_area(i,j),(c1-aice(i,j)))
+        ! cannot be greater than the open water fraction
+        lead_area = MIN(lead_area,(c1-aice))
       
-                ! sanity checks
-                if (lead_area(i,j).gt.c1) stop 'lead_area not frac!'
-                if (lead_area(i,j).ne.lead_area(i,j)) stop 'lead_a NaN'
-                if (lead_area(i,j).lt.c0) then
-                        if (lead_area(i,j).lt.(c0-puny)) then
-                                stop 'lead_area lt0 in partition_area'
-                        else
-                                lead_area(i,j)=MAX(lead_area(i,j),c0)
-                        end if
+        ! sanity checks
+        if (lead_area.gt.c1) stop 'lead_area not frac!'
+        if (lead_area.ne.lead_area) stop 'lead_a NaN'
+        if (lead_area.lt.c0) then
+                if (lead_area.lt.(c0-puny)) then
+                        stop 'lead_area lt0 in partition_area'
+                else
+                        lead_area=MAX(lead_area,c0)
                 end if
+        end if
 
-                ! Total fractional lateral surface area in each grid (per unit ocean area)
-                do n=1,ncat
-                    thickness = c0
-                    if (aicen(i,j,n).gt.c0) thickness = vicen(i,j,n)/aicen(i,j,n)
+        ! Total fractional lateral surface area in each grid (per unit ocean area)
+        do n = 1, ncat
+            thickness = c0
 
-                        do k=1,nfsd
-                             latsurf_area(i,j) = latsurf_area(i,j) + &
-                                                    trcrn(i,j,nt_fsd+k-1,n) * aicen(i,j,n) * & ! FSD
-                                                    c2 * thickness/floe_rad_c(k)
-                        end do
-                end do 
+            if (aicen(n).gt.c0) thickness = vicen(n)/aicen(n)
 
-                ! check
-                if (latsurf_area(i,j).lt.c0) stop &
-                          'negative latsurf_ area'
-                if (lead_area(i,j).ne.lead_area(i,j)) stop &
-                          'latsurf_ area NaN'
-         end if ! aice
-       end do !i
-       end do !j
+                do k=1,nfsd
+                    latsurf_area = latsurf_area + trcrn(k,n) * aicen(n) * & ! FSD
+                                   c2 * thickness/floe_rad_c(k)
+                end do ! k
+        end do ! n
+
+        ! sanity checks
+        if (latsurf_area.lt.c0) stop 'negative latsurf_ area'
+        if (lead_area.ne.lead_area) stop 'latsurf_ area NaN'
+
+    end if ! aice
 
               end subroutine partition_area
-!=======================================================================
 
+!=======================================================================
+!
+! Wrapper for floe_merge_thermo
+!
       subroutine icepack_mergefsd ( &
                                iblk, nx_block, ny_block, &
                                icells, indxi, indxj,     & 
