@@ -188,9 +188,20 @@
 
     ! LR all set for freq 25 
 
+    wave_spectrum(:,:,:,:) = c0
     if (trim(wave_spec_file).eq.'') then
-        wave_spectrum(:,:,:,:) = c0
-      
+        !wave_spectrum(:,:,:,:) = c0
+        ! LR dummy values FOR TESTING ONLY
+        ! do not use for actual runs!!
+        wave_spectrum(:,:,1,:) = 0.00015429197810590267
+        wave_spectrum(:,:,2,:) = 0.002913531381636858 
+        wave_spectrum(:,:,3,:) = 0.02312942035496235
+        wave_spectrum(:,:,4,:) = 0.07201970368623734
+        wave_spectrum(:,:,5,:) = 0.06766948103904724 
+        wave_spectrum(:,:,6,:) = 0.005527883302420378
+        wave_spectrum(:,:,7,:) = 3.326293881400488e-05 
+        wave_spectrum(:,:,8,:) = 6.815936703929992e-10 
+        wave_spectrum(:,:,9,:) = 2.419401186610744e-20      
     else
 
         spec_file = trim(wave_spec_dir)//&
@@ -203,18 +214,20 @@
         wave_spectrum(:,:,:,:) = tmp(:,:,:,1,:)
         WHERE (wave_spectrum.gt.bignum) wave_spectrum = c0
 
-        ! NB hardwired for wave coupling with our version of Wavewatch
-        ! from Wavewatch, set as f(n+1) = C*f(n) where C is a constant set by the user, typically ~ 1.1.
-        ! these freq are for C = 1.1
-        freq = (/0.04118,     0.045298,    0.0498278,   0.05481058,  0.06029164,  0.06632081, &
-                 0.07295289,  0.08024818,  0.08827299,  0.09710029,  0.10681032,  0.11749136, &
-                 0.1292405,   0.14216454,  0.15638101,  0.17201911,  0.18922101,  0.20814312, &
-                 0.22895744,  0.25185317,  0.27703848,  0.30474234,  0.33521661,  0.36873826, &
-                 0.40561208/)
- 
-        ! boundaries of bin n are at f(n)*sqrt(1/C) and f(n)*sqrt(C) 
-        dfreq(:) = freq(:)*(SQRT(1.1_dbl_kind) - SQRT(c1/1.1_dbl_kind))
     end if
+   
+    ! NB hardwired for wave coupling with our version of Wavewatch
+    ! from Wavewatch, set as f(n+1) = C*f(n) where C is a constant set by the user, typically ~ 1.1.
+    ! these freq are for C = 1.1
+    freq = (/0.04118,     0.045298,    0.0498278,   0.05481058,  0.06029164,  0.06632081, &
+             0.07295289,  0.08024818,  0.08827299,  0.09710029,  0.10681032,  0.11749136, &
+             0.1292405,   0.14216454,  0.15638101,  0.17201911,  0.18922101,  0.20814312, &
+             0.22895744,  0.25185317,  0.27703848,  0.30474234,  0.33521661,  0.36873826, &
+             0.40561208/)
+
+    ! boundaries of bin n are at f(n)*sqrt(1/C) and f(n)*sqrt(C) 
+    dfreq(:) = freq(:)*(SQRT(1.1_dbl_kind) - SQRT(c1/1.1_dbl_kind))
+ 
 #endif
          end subroutine get_wave_spec
 
