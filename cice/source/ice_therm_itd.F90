@@ -1954,6 +1954,7 @@
             ! new ice area and thickness
             ! hin_max(0) < new ice thickness < hin_max(1)
             if ((aice0(i,j)-amount_taken) > puny) then
+               ! thickness if spread over open water
                hi0new = max(vi0new(ij)/(aice0(i,j)-amount_taken), hfrazilmin)
                if (hi0new > hi0max .and. (aice0(i,j)-amount_taken)+puny < c1) then
                   ! distribute excess volume over all categories (below)
@@ -1987,7 +1988,7 @@
             ! altogether
             d_an_tot(i,j,2:ncat) = d_an_latg(i,j,2:ncat)
             d_an_tot(i,j,1) = d_an_latg(i,j,1) + d_an_addnew(i,j,1)
-            vin0new(ij,1) = vin0new(ij,1) +ai0new(ij)*hi0new 
+            vin0new(ij,1) = vin0new(ij,1) + ai0new(ij)*hi0new
                
             if (SUM(d_an_tot(i,j,:)).gt.(puny+aice0(i,j))) stop &
                 'too much d_an_tot'

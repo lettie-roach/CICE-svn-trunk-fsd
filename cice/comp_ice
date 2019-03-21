@@ -80,7 +80,7 @@ setenv NUMAX 99           # maximum file unit number
 setenv SRCDIR $SYSTEM_USERDIR/cice  # conejo
 #setenv SRCDIR /Users/akt/Work/MPAS-CICE/Column_Package/cice_package/cice
 
-setenv EXEDIR /nesi/nobackup/niwa00013/roachla/cice_5.1.2_output/rundir
+setenv EXEDIR /nesi/nobackup/niwa00016/roachla/cice_5.1.2_output/rundir
                                           if !(-d $EXEDIR) mkdir -p $EXEDIR
 setenv CBLD   $SRCDIR/bld
 setenv OBJDIR $EXEDIR/compile           ; if !(-d $OBJDIR) mkdir -p $OBJDIR

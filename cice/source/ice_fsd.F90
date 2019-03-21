@@ -211,6 +211,7 @@
         
         use ice_state, only: nt_fsd
         use ice_domain_size, only: max_ntrcr
+        use ice_init, only: ice_ic
 
         integer(kind=int_kind), intent(in) :: &
              nx_block , &
@@ -222,7 +223,9 @@
          intent(inout) :: &
               trcrn     ! tracer array
 
-	real (kind=dbl_kind) :: alpha, totfrac
+	real (kind=dbl_kind) :: alpha
+    
+    real (kind=dbl_kind),  dimension (nx_block,ny_block,ncat) ::  totfrac
 
         integer (kind=int_kind) :: k
 
@@ -230,39 +233,26 @@
              num_fsd,  &  ! number distribution of floes
              frac_fsd     ! fraction distribution of floes
 
+    if (trim(ice_ic) == 'none') then
         do k=1,nfsd
-           trcrn(:,:,nt_fsd+k-1,:)=c0
+            trcrn(:,:,nt_fsd+k-1,:)=c0
         end do
  
-        !alpha=c2+p1
-        !
-        !do k=1,nfsd
-        !   num_fsd(k)=(2*floe_rad_c(k))**(-alpha-c1) 
-        !enddo                   
-        
-        ! total fraction of floes 
-        !totfrac=c0
-
-        !do k=1,nfsd
-        !   frac_fsd(k)=num_fsd(k)*floe_area_c(k) ! convert to frac from num
-        !   totfrac=totfrac+frac_fsd(k)
-        !enddo
-
-        ! normalize to one
-        !frac_fsd=frac_fsd/totfrac  
-
+    else            ! Perovich (2014)
+                                
         ! fraction of ice in each floe size and thickness category
-        ! same for all thickness categories
         ! same for ALL cells (even where no ice) initially
-        !do k=1,nfsd
-        !   trcrn(:,:,nt_fsd+k-1,:)=frac_fsd(k)
-        !end do
- 
-        !write(*,*)'init_fsd: initial number distribution of floes'
-        !write(*,*) num_fsd(1:nfsd)
-        !write(*,*)'init_fsd: initial fraction distribution of floes'
-        !write(*,*) frac_fsd(1:nfsd)
-
+        alpha = 2.1_dbl_kind
+        totfrac = c0                                   ! total fraction of floes 
+        do k = 1, nfsd
+            num_fsd(k) = (2*floe_rad_c(k))**(-alpha-c1) ! number distribution of floes
+            trcrn(:,:,nt_fsd+k-1,:) = num_fsd(k)*floe_area_c(k)*floe_binwidth(k) ! fraction distribution of floes
+            totfrac = totfrac + trcrn(:,:,nt_fsd+k-1,:)
+        enddo
+        do k = 1,nfsd                                                                                             
+            trcrn(:,:,nt_fsd+k-1,:) = trcrn(:,:,nt_fsd+k-1,:)/totfrac
+        end do
+                                                                                                                                            endif ! ice_ic
       end subroutine init_fsd
 
 !=======================================================================
