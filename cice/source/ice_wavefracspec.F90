@@ -462,8 +462,11 @@
                                 end if
                         end do
 
-                        if (fraclengths(j).lt.(floe_rad_l(1)-puny)) stop 'fractures too small'
-                
+                        ! sanity check
+                        if (fraclengths(j).lt.(floe_rad_l(1)-puny)) then
+                            if (fraclengths(j).gt.puny) stop 'fractures too small'
+                        end if
+
                 end do
      end if
  
