@@ -23,9 +23,8 @@
       save
 
       character(len=char_len_long) :: &
-! LR set to 'none' - this is to allow FSD to emerge
          ice_ic  ! method of ice cover initialization
-! LR                    ! 'default'  => latitude and sst dependent
+                        ! 'default'  => latitude and sst dependent
                         ! 'none'     => no ice
                         ! note:  restart = .true. overwrites
 
