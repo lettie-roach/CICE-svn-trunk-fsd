@@ -258,7 +258,7 @@
             call read_restart_fsd
          else
             do iblk = 1, nblocks
-               call init_fsd(nx_block, ny_block, iblk, ncat, nfsd, trcrn(:,:,:,:,iblk))
+               call init_fsd(ice_ic, nx_block, ny_block, iblk, ncat, nfsd, trcrn(:,:,:,:,iblk))
             enddo ! iblk
          endif
       endif

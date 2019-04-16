@@ -207,11 +207,13 @@
 !  Alpha value from Perovich (2014
 !
 
-      subroutine init_fsd(nx_block, ny_block, iblk, ncat, nfsd, trcrn)
+      subroutine init_fsd(ice_ic, nx_block, ny_block, iblk, ncat, nfsd, trcrn)
         
         use ice_state, only: nt_fsd
         use ice_domain_size, only: max_ntrcr
-        use ice_init, only: ice_ic
+
+   character(len=char_len_long), intent(in) :: &
+                ice_ic           ! method of ice cover initialization
 
         integer(kind=int_kind), intent(in) :: &
              nx_block , &
