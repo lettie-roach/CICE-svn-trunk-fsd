@@ -2377,22 +2377,8 @@
 
     enddo !n
 
-      if (l_conservation_check) then
-
-      ! initial ice volume in each grid cell
-      eicen(:,:,:) = c0
-      do n = 1, ncat
-      do k = 1, nilyr
-      do ij = 1, icells
-         i = indxi(ij)
-         j = indxj(ij)
-         eicen(i,j,n) = eicen(i,j,n) + trcrn(i,j,nt_qice+k-1,n) &
-                      * vicen(i,j,n)/real(nilyr,kind=dbl_kind)
-      enddo
-      enddo
-      enddo
-
-! LR
+    ! LR
+    if (tr_fsd) then
     ! sanity
     do n = 1,ncat
         do ij = 1, jcells
@@ -2431,7 +2417,27 @@
  
             end do ! n
         end do ! k
+
+
+    end if
 !----------------------
+
+
+
+      if (l_conservation_check) then
+
+      ! initial ice volume in each grid cell
+      eicen(:,:,:) = c0
+      do n = 1, ncat
+      do k = 1, nilyr
+      do ij = 1, icells
+         i = indxi(ij)
+         j = indxj(ij)
+         eicen(i,j,n) = eicen(i,j,n) + trcrn(i,j,nt_qice+k-1,n) &
+                      * vicen(i,j,n)/real(nilyr,kind=dbl_kind)
+      enddo
+      enddo
+      enddo
 
       call column_sum (nx_block, ny_block,       &
                        icells,   indxi,   indxj, &
