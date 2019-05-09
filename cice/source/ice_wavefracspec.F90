@@ -75,14 +75,18 @@
 
        d_amfstd(:) = gain(:) - loss(:)
  
-      if (SUM(d_amfstd(:)).gt.puny) stop 'area not cons, waves'
+      if (ABS(SUM(d_amfstd(:))).gt.puny) stop 'area not cons, waves'
 
-
+      WHERE (ABS(d_amfstd).lt.puny) d_amfstd = c0 
 
       end  function get_damfstd_wave
 
 !=======================================================================
-
+!
+!    Adaptive timestepping for wave fracture
+!    Author: Lettie Roach, NIWA 2018
+!    See Horvat & Tziperman (2017) JGR Oceans, Appendix A
+!
      function get_subdt_wave(amfstd_init, d_amfstd) &
                               result(subdt)
 
@@ -98,12 +102,13 @@
 
       check_dt(:) = bignum 
       do k = 1, nfsd
-          if (d_amfstd(k).gt.puny) check_dt(k) = (1-amfstd_init(k))/d_amfstd(k)
+          if (d_amfstd(k).gt.puny) check_dt(k) = (c1-amfstd_init(k))/d_amfstd(k)
           if (d_amfstd(k).lt.-puny) check_dt(k) = amfstd_init(k)/ABS(d_amfstd(k))
       end do 
             
       subdt = MINVAL(check_dt)
- 
+
+
 
       end function get_subdt_wave
 
@@ -216,7 +221,7 @@
         frac    
 
       real (kind=dbl_kind) :: &
-        hbar, elapsed_t, subdt
+        hbar, elapsed_t, subdt, cons_error
 
       real (kind=dbl_kind), dimension (nfsd) :: &
            amfstd_init     ! tracer array
@@ -263,10 +268,7 @@
                     ! for diagnostics
                     amfstd_init(:) = trcrn(:,n)
 
-                    ! sanity check
-                    if (ABS(SUM(amfstd_init(:))-c1).gt.puny) stop &
-                                    'init mFSTD not norm, wave'
-                            
+                           
                     ! protect against small numerical errors
                     WHERE (amfstd_init.lt.puny) amfstd_init = c0
                     amfstd_init = amfstd_init(:) / SUM(amfstd_init(:))
@@ -286,47 +288,67 @@
 
                     ! adaptive sub-timestep
                     elapsed_t = c0
+                    cons_error = c0
                     DO WHILE (elapsed_t.lt.dt)
 
                          ! calculate d_amfstd using current afstd
                          d_amfstd_tmp = get_damfstd_wave(amfstd_tmp, fracture_hist, frac)
-                         WHERE (ABS(d_amfstd_tmp).lt.puny) d_amfstd_tmp = c0 
 
+ 
                          ! timestep required for this
                          subdt = get_subdt_wave(amfstd_tmp, d_amfstd_tmp)
-                         subdt = MIN(subdt, dt)
+                         subdt = MIN(subdt, dt) ! cannot be greater than CICE timestep
 
                          ! update amfstd and elpased time
                          amfstd_tmp = amfstd_tmp + subdt * d_amfstd_tmp(:)
 
                          ! check conservation and negatives
-                        if (ANY(amfstd_tmp.lt.-puny)) stop &
+                         if (ANY(amfstd_tmp.lt.-puny)) stop &
                                  'wb, <0 in loop'
 
                          if (ANY(amfstd_tmp.gt.c1+puny)) stop &
                                  'wb, >1 in loop'
-
-                         ! in case of small numerical errors
-                         WHERE (amfstd_tmp.lt.puny) amfstd_tmp = c0
-                         amfstd_tmp = amfstd_tmp/SUM(amfstd_tmp)
-
-                        ! update time
+                         ! update time
                          elapsed_t = elapsed_t + subdt 
 
                     END DO
 
+                    ! In some cases---particularly for strong fracturing---the equation 
+                    ! for wave fracture does not quite conserve area. With this test wave
+                    ! forcing, the area conservation error is usually less than 10^-8.
+                    ! Simply renormalizing may cause the first floe size category to reduce,
+                    ! which is not physically allowed to happen. So as a rather blunt fix,
+                    ! we adjust the largest floe size category possible to account for the
+                    ! tiny extra area.
+                    cons_error = SUM(amfstd_tmp) - c1
+                    if (ABS(cons_error).gt.1.0e-8_dbl_kind) print *, 'Area conservation error, waves ',cons_error
+
+                    do k = nfsd, 1, -1
+                        if (amfstd_tmp(k).gt.cons_error) then
+                            amfstd_tmp(k) = amfstd_tmp(k) - cons_error
+                            EXIT
+                        end if
+                    end do
+
                     ! update trcrn    
-                    ! was already normalized in loop
-                    trcrn(:,n) = amfstd_tmp
-     
+                    trcrn(:,n) = amfstd_tmp/SUM(amfstd_tmp)
+
+                    if ((trcrn(1,n) - amfstd_init(1)).lt.(c0-puny)) then
+                        print *, trcrn(1,n) - amfstd_init(1)
+                        print *, 'sum aftsd_tmp ',SUM(amfstd_tmp)
+                        print *, 'aftsd_tmp ',amfstd_tmp
+                        stop 'Wave frac in smallest cat'
+                    end if
+
+
                     ! sanity checks
-                    if (ABS(SUM(trcrn(:,n))-c1).gt.puny) stop 'not 1 wb'
-                    if (ANY(trcrn(:,n).lt.c0)) stop 'neg wb'
-                    if (ANY(trcrn(:,n).gt.c1)) stop '>1 wb'
+                    if (ANY(trcrn(:,n).lt.c0-puny)) stop 'neg wb'
+                    if (ANY(trcrn(:,n).gt.c1+puny)) stop '>1 wb'
 
                     ! for diagnostics
                     d_amfstd_wave(:,n) = trcrn(:,n) - amfstd_init(:)  
                     d_afsd_wave(:) =  d_afsd_wave(:) + aicen(n)*d_amfstd_wave(:,n)
+
 
                 end if ! aicen>puny
             end do ! n

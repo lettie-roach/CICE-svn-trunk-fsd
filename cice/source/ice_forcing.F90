@@ -193,15 +193,15 @@
         wave_spectrum(:,:,:,:) = c0
         ! LR dummy values FOR TESTING ONLY
         ! do not use for actual runs!!
-        !wave_spectrum(:,:,1,:) = 0.00015429197810590267
-        !wave_spectrum(:,:,2,:) = 0.002913531381636858 
-        !wave_spectrum(:,:,3,:) = 0.02312942035496235
-        !wave_spectrum(:,:,4,:) = 0.07201970368623734
-        !wave_spectrum(:,:,5,:) = 0.06766948103904724 
-        !wave_spectrum(:,:,6,:) = 0.005527883302420378
-        !wave_spectrum(:,:,7,:) = 3.326293881400488e-05 
-        !wave_spectrum(:,:,8,:) = 6.815936703929992e-10 
-        !wave_spectrum(:,:,9,:) = 2.419401186610744e-20      
+        wave_spectrum(:,:,1,:) = 0.00015429197810590267
+        wave_spectrum(:,:,2,:) = 0.002913531381636858 
+        wave_spectrum(:,:,3,:) = 0.02312942035496235
+        wave_spectrum(:,:,4,:) = 0.07201970368623734
+        wave_spectrum(:,:,5,:) = 0.06766948103904724 
+        wave_spectrum(:,:,6,:) = 0.005527883302420378
+        wave_spectrum(:,:,7,:) = 3.326293881400488e-05 
+        wave_spectrum(:,:,8,:) = 6.815936703929992e-10 
+        wave_spectrum(:,:,9,:) = 2.419401186610744e-20      
     else
 
         spec_file = trim(wave_spec_dir)//&
