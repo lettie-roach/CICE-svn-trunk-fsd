@@ -1,6 +1,30 @@
-! Lettie Roach, NIWA/VUW, June 2016
-! Some of this modified from Chris Horvat's Matlab original
-! New module for CICE to generate waves and break the FSD
+!
+!  This module contains the subroutines required to fracture sea ice
+!  by ocean surface waves
+!
+!  Theory based on:
+!
+!    Horvat, C., & Tziperman, E. (2015). A prognostic model of the sea-ice 
+!    floe size and thickness distribution. The Cryosphere, 9(6), 2119–2134.
+!    doi:10.5194/tc-9-2119-2015
+!
+!  and implementation described in:
+!
+!    Roach, L. A., Horvat, C., Dean, S. M., & Bitz, C. M. (2018). An emergent
+!    sea ice floe size distribution in a global coupled ocean--sea ice model. 
+!    Journal of Geophysical Research: Oceans, 123(6), 4322–4337. 
+!    doi:10.1029/2017JC013692
+!
+!  now with some modifications to allow direct input of ocean surface wave spectrum.
+!
+!  We calculate the fractures that would occur if waves enter a fully ice-covered 
+!  region defined in one dimension in the direction of propagation, and then apply 
+!  the outcome proportionally to the ice-covered fraction in each grid cell. Assuming
+!  that sea ice flexes with the sea surface height field, strains are computed on this
+!  sub-grid-scale 1D domain. If the strain between successive extrema exceeds a critical
+!  value new floes are formed with diameters equal to the distance between the extrema.
+!
+!  authors: 2016-8 Lettie Roach, NIWA/VUW
 !
       module ice_wavefracspec
 
@@ -39,7 +63,11 @@
       contains
 
 !=======================================================================
-
+!
+!  Calculate the change in the FSD arising from wave fracture
+!
+!  authors: 2017 Lettie Roach, NIWA/VUW
+!
      function get_damfstd_wave(amfstd_init, fracture_hist, frac) &
                               result(d_amfstd)
 
@@ -83,9 +111,11 @@
 
 !=======================================================================
 !
-!    Adaptive timestepping for wave fracture
-!    Author: Lettie Roach, NIWA 2018
-!    See Horvat & Tziperman (2017) JGR Oceans, Appendix A
+!  Adaptive timestepping for wave fracture
+!  See reference: Horvat & Tziperman (2017) JGR, Appendix A
+!
+!  authors: 2018 Lettie Roach, NIWA/VUW
+!
 !
      function get_subdt_wave(amfstd_init, d_amfstd) &
                               result(subdt)
@@ -171,9 +201,13 @@
 
 
 !=======================================================================
-!  Author: Lettie Roach, NIWA, 2018
 ! 
-! Given fracture histogram computed from local wave spectrum, evolve FSD
+!  Given fracture histogram computed from local wave spectrum, evolve 
+!  the floe size distribution
+!
+!  authors: 2018 Lettie Roach, NIWA/VUW
+!
+
 
      subroutine wave_frac_fsd(aice,  vice,        & ! in 
                               aicen,              & ! in
@@ -361,14 +395,18 @@
 
 
 !=======================================================================
-! Author: Lettie Roach, NIWA, 2018
 !
-! Based on MatLab code from Horvat & Tziperman (2015). Calculates functions 
-! to describe the change in the FSD when waves fracture ice, given a wave
-! spectrum (1D frequency, 25 frequency bins) in ice. 
-! We calculate extrema and if these are successive maximum, minimum, maximum or
-! vice versa, and have strain greater than a critical strain, break ice and 
-! create new floes with lengths equal to these distances
+!  Calculates functions to describe the change in the FSD when waves 
+!  fracture ice, given a wave spectrum (1D frequency, 25 frequency bins)
+!  in ice. We calculate extrema and if these are successive maximum, 
+!  minimum, maximum or vice versa, and have strain greater than a 
+!  critical strain, break ice and create new floes with lengths equal
+!  to these distances. Based on MatLab code written by Chris Horvat,
+!  from Horvat & Tziperman (2015). 
+!
+!  Note that a realization of sea surface height requires a random phase.
+!
+!  authors: 2018 Lettie Roach, NIWA/VUW
 
      subroutine wave_frac(hbar, spec_efreq, frac_local)
 
@@ -503,11 +541,15 @@
      end subroutine wave_frac
 
 !===========================================================================
+!
 !  Given the (attenuated) sea surface height, find the strain across triplets
 !  of max, min, max or min, max, min (local extrema within 10m).
 !  If this strain is greater than the  critical strain, ice can fracture
 !  and new floes are formed with sizes equal to the distances between
-!  extrema
+!  extrema. Based on MatLab code written by Chris Horvat,
+!  from Horvat & Tziperman (2015). 
+!
+!  authors: 2016 Lettie Roach, NIWA/VUW
 !
         subroutine get_fraclengths(X, eta, fraclengths, hbar, e_stop)
 

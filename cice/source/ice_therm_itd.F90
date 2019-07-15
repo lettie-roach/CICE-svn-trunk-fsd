@@ -1474,6 +1474,22 @@
 ! added to only category 1, all formulations combine the new ice and
 ! existing ice tracers as bulk quantities.
 !
+! Modifications by Lettie Roach:   Evolve the FSD subject to lateral
+! growth and the growth of new ice in thickness category 1. If ocean 
+! surface wave forcing is provided, the floe size of new ice
+! (grown away from floe edges) can computed from the wave field
+! based on the tensile (stretching) stress limitation following
+! Shen et al. (2001). Otherwise, new floes all grow in the smallest
+! floe size category, representing pancake ice formation.
+!
+!  Shen, H., Ackley, S., & Hopkins, M. (2001). A conceptual model 
+!  for pancake-ice formation in a wave field. 
+!  Annals of Glaciology, 33, 361-367. doi:10.3189/172756401781818239
+!
+! Some portion of new ice growth occurs at the edges of floes. The 
+! remainder will grow as new ice frazil ice in open water (away from 
+! floes). See Horvat & Tziperman (2015) and Roach, Horvat et al. (2018).
+!
 ! authors William H. Lipscomb, LANL
 !         Elizabeth C. Hunke, LANL
 !         Adrian Turner, LANL

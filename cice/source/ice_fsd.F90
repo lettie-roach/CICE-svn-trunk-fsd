@@ -1,16 +1,30 @@
+!=========================================================================
 !
-! This module contains the subroutines required to define
-! a floe size distribution tracer for sea ice
+!  This module contains the subroutines required to define
+!  a floe size distribution tracer for sea ice
 !
-! authors: liuxy
-!          C. M. Bitz, UW
-!          Lettie Roach, NIWA
+!  Theory based on:
 !
-! 2015: liuxy, modified from ice_fsd module
-! 2016: CMB rewrote a lot of it
-! 2016: LR made some modifications
- 
-      module ice_fsd
+!    Horvat, C., & Tziperman, E. (2015). A prognostic model of the sea-ice 
+!    floe size and thickness distribution. The Cryosphere, 9(6), 2119–2134.
+!    doi:10.5194/tc-9-2119-2015
+!
+!  and implementation described in:
+!
+!    Roach, L. A., Horvat, C., Dean, S. M., & Bitz, C. M. (2018). An emergent
+!    sea ice floe size distribution in a global coupled ocean--sea ice model. 
+!    Journal of Geophysical Research: Oceans, 123(6), 4322–4337. 
+!    doi:10.1029/2017JC013692
+!
+!  with some modifications.
+!
+!  authors: Lettie Roach, VUW/NIWA
+!           C. M. Bitz, UW
+!  
+!  2016: CMB started
+!  2016-8: LR worked on most of it
+!
+     module ice_fsd
 
       use ice_domain_size, only: ncat, nfsd, max_blocks, nfreq
       use ice_blocks, only: nx_block, ny_block
@@ -85,6 +99,8 @@
 !
 !  Note also that the bound of the lowest floe size category is used
 !  to define the lead region width and the domain spacing for wave breaking
+!
+!  authors: Lettie Roach, NIWA/VUW and C. M. Bitz, UW
 !
        subroutine init_fsd_bounds
 
@@ -202,10 +218,21 @@
 
 !=======================================================================
 !
-!  Initialize the FSD as zero everywhere
-!  Commented out part - initalize with a power law, following Perovich (2014)
-!  Alpha value from Perovich (2014
+!  Initialize the FSD 
 !
+!  When growing from no-ice conditions, initialize to zero.
+!  This allows the FSD to emerge, as described in Roach, Horvat et al. (2018)
+!
+!  Otherwise initalize with a power law, following Perovich
+!  & Jones (2014). The basin-wide applicability of such a 
+!  prescribed power law has not yet been tested.
+!
+!  Perovich, D. K., & Jones, K. F. (2014). The seasonal evolution of 
+!  sea ice floe size distribution. Journal of Geophysical Research: Oceans,
+!  119(12), 8767–8777. doi:10.1002/2014JC010136
+!
+!  authors: Lettie Roach, NIWA/VUW
+
 
       subroutine init_fsd(ice_ic, nx_block, ny_block, iblk, ncat, nfsd, trcrn)
         
@@ -410,9 +437,16 @@
 
 !=======================================================================
 ! 
-! Given a wave spectrum, calculate size of new floes based on tensile failire
-! See Shen & Ackley (2004), Roach, Smith & Dean (2018) for further details
-! Author: Lettie Roach (NIWA) 2018
+!  Given a wave spectrum, calculate size of new floes based on 
+!  tensile failure, following Shen et al. (2001)
+!
+!  The tensile mode parameter is based on in-situ measurements
+!  by Roach, Smith & Dean (2018).
+!
+!  authors: Lettie Roach, NIWA/VUW
+!
+
+ ettie Roach (NIWA) 2018
 
       subroutine wave_dep_growth (local_wave_spec, & 
                                   wave_hs_in_ice,  &
@@ -637,6 +671,21 @@
 
 
 !=======================================================================
+!
+!  Floes are perimitted to weld together in freezing conditions, according
+!  to their geometric probability of overlap if placed randomly on the 
+!  domain. The coagulation equation is solved using the method of Filbet
+!  & Laurencot (2004). The rate per unit area c_weld is the total number 
+!  of floes that weld with another, per square meter, per unit time, in the 
+!  case of a fully covered ice surface (aice=1), equal to twice the reduction
+!  in total floe number. See Roach, Smith & Dean (2018).
+!
+!  Filbet, F., & Laurençot, P. (2004). Numerical simulation of the Smoluchowski 
+!  coagulation equation. SIAM Journal on Scientific Computing, 25(6), 2004–2028. 
+!  doi:10.1137/S1064827503429132
+!
+!  authors: Lettie Roach, NIWA/VUW
+!
 
         subroutine floe_merge_thermo (dt, aicen, frzmlt, &
                                       areal_mfstd,       &
