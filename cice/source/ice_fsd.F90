@@ -446,7 +446,7 @@
 !  authors: Lettie Roach, NIWA/VUW
 !
 
- ettie Roach (NIWA) 2018
+
 
       subroutine wave_dep_growth (local_wave_spec, & 
                                   wave_hs_in_ice,  &
