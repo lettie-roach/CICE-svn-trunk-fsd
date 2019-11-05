@@ -347,23 +347,30 @@
 
                     END DO
 
-                    ! In some cases---particularly for strong fracturing---the equation 
-                    ! for wave fracture does not quite conserve area. With this test wave
-                    ! forcing, the area conservation error is usually less than 10^-8.
-                    ! Simply renormalizing may cause the first floe size category to reduce,
-                    ! which is not physically allowed to happen. So as a rather blunt fix,
-                    ! we adjust the largest floe size category possible to account for the
-                    ! tiny extra area.
-                    cons_error = SUM(amfstd_tmp) - c1
-                    if (ABS(cons_error).gt.1.0e-8_dbl_kind) print *, 'Area conservation error, waves ',cons_error
+                   ! In some cases---particularly for strong fracturing---the equation
+                   ! for wave fracture does not quite conserve area.
+                   ! With the dummy wave forcing, this happens < 2% of the time (in
+                   ! 1997) and is always less than 10^-7.
+                   ! Simply renormalizing may cause the first floe size 
+                   ! category to reduce, which is not physically allowed
+                   ! to happen. So we adjust here
+                   cons_error = SUM(amfstd_tmp) - c1
 
-                    do k = nfsd, 1, -1
-                        if (amfstd_tmp(k).gt.cons_error) then
-                            amfstd_tmp(k) = amfstd_tmp(k) - cons_error
-                            EXIT
-                        end if
-                    end do
+                   ! area loss: add to first category
+                   if (cons_error.lt.c0) then
+                      amfstd_tmp(1) = amfstd_tmp(1) - cons_error
+                   else
+                   ! area gain: take it from the largest possible category 
+                   do k = nfsd, 1, -1
+                     if (amfstd_tmp(k).gt.cons_error) then
+                        amfstd_tmp(k) = amfstd_tmp(k) - cons_error
+                        EXIT
+                     end if
+                   end do
+                   end if
 
+
+                            
                     ! update trcrn    
                     trcrn(:,n) = amfstd_tmp/SUM(amfstd_tmp)
 
