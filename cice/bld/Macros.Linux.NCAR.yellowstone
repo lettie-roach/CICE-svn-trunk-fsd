@@ -29,9 +29,9 @@ NETCDF_PATH := $(NETCDF)
 PIO_CONFIG_OPTS:= --enable-filesystem-hints=gpfs 
 
 #PNETCDF_PATH := $(PNETCDF)
-PNETCDF_PATH := /glade/apps/opt/pnetcdf/1.3.0/intel/default
+PNETCDF_PATH := /glade/apps/opt/pnetcdf/1.7.0/intel/default
 
-LAPACK_LIBDIR := /glade/apps/opt/lapack/3.4.2/intel/12.1.5/lib
+LAPACK_LIBDIR := /glade/apps/opt/lapack/3.6.0/intel/15.0.3/lib
 
 INCLDIR := $(INCLDIR)
 
@@ -66,9 +66,9 @@ endif
 
 ### if using parallel I/O, load all 3 libraries.  PIO must be first!
 ifeq ($(IO_TYPE), pio)
-   PIO_PATH:=/glade/u/home/jedwards/pio1_6_5/pio
+   PIO_PATH:=/glade/u/home/katec/PIO2_build_Intel-16.0.3_032917
    INCLDIR += -I$(PIO_PATH)
-   SLIBS   := $(SLIBS) -L$(PIO_PATH) -lpio
+   SLIBS   := $(SLIBS) -L$(PIO_PATH) -lpioc -lpiof
 
    CPPDEFS :=  $(CPPDEFS) -Dncdf
 endif

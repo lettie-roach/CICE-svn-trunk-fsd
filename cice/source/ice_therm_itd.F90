@@ -1532,8 +1532,9 @@
       use ice_zbgc_shared, only: skl_bgc
       use ice_fsd, only: floe_rad_c, floe_binwidth, &
                          wave_dep_growth, &
-                         new_ice_fs, partition_area
+                         partition_area
       use ice_domain_size, only: nfsd, nfreq
+      use ice_wavefracspec, only: wave_spec
 
       ! FSD
       real (kind=dbl_kind), dimension(nx_block,ny_block,ncat), intent(out) :: &
@@ -2235,7 +2236,8 @@
          else
              areal_mfstd_latg(i,j,:,n) = areal_mfstd_init(i,j,:,n) 
          end if ! lat growth
-                                
+                        
+         new_size = nfsd        
          if (n.eq.1) then
             ! add new frazil ice to smallest thickness 
             if (d_an_addnew(i,j,n).gt.puny) then   
@@ -2247,29 +2249,9 @@
                 
                     if (SUM(areal_mfstd_latg(i,j,:,n)).gt.puny) then ! FSD exists
 
-                        if (new_ice_fs.eq.0) then
-                            ! grow in smallest
-                            areal_mfstd_ni(1) =  (area2(i,j,n) * areal_mfstd_latg(i,j,1,n) + &
-                                ai0new(m))/(area2(i,j,n)+ai0new(m))                                                        
-
-                            do k=2,nfsd  ! diminish other floe cats accordingly
-                                areal_mfstd_ni(k) = areal_mfstd_latg(i,j,k,n) * &
-                                    area2(i,j,n)/(area2(i,j,n)+ai0new(m))
-                            enddo 
-
-                        else if (new_ice_fs.eq.1) then
-                            ! grow in largest
-                            areal_mfstd_ni(nfsd) =  (area2(i,j,n) * areal_mfstd_latg(i,j,nfsd,n) + &
-                                ai0new(m))/(area2(i,j,n)+ai0new(m))
-
-                            do k=1,nfsd-1  ! diminish other floe cats accordingly
-                                areal_mfstd_ni(k) = areal_mfstd_latg(i,j,k,n) * &
-                                    area2(i,j,n)/(area2(i,j,n)+ai0new(m))
-                            end do
-
-                        else if (new_ice_fs.ge.2) then
-                            if (new_ice_fs.eq.2) new_size = nfsd
-                            if (new_ice_fs.eq.3) call wave_dep_growth(wave_spectrum(i,j,:), wave_hs_in_ice(i,j), new_size)
+                      if (wave_spec) then
+                        if (wave_hs_in_ice(i,j).gt.puny) & 
+                            call wave_dep_growth(wave_spectrum(i,j,:), new_size)
 
                             ! grow in new_size
                             areal_mfstd_ni(new_size) =  (area2(i,j,n) * areal_mfstd_latg(i,j,new_size,n) + &
@@ -2284,21 +2266,25 @@
                                 areal_mfstd_ni(k) = areal_mfstd_latg(i,j,k,n) * &
                                     area2(i,j,n)/(area2(i,j,n)+ai0new(m))
                             end do
-
-                        end if ! new_fs_option
-
+ 
+                      else ! grow in smallest floe size category
+                            areal_mfstd_ni(1) =  (area2(i,j,n) * areal_mfstd_latg(i,j,1,n) + &
+                                ai0new(m))/(area2(i,j,n)+ai0new(m))                                                        
+                            do k=2,nfsd  ! diminish other floe cats accordingly
+                                areal_mfstd_ni(k) = areal_mfstd_latg(i,j,k,n) * &
+                                    area2(i,j,n)/(area2(i,j,n)+ai0new(m))
+                            enddo 
+                      end if ! wave spec
+                      
                     else ! entirely new ice or not
-                    
-                        if (new_ice_fs.eq.0) then
-                            areal_mfstd_ni(1) = c1
-                        else if (new_ice_fs.eq.1) then
-                            areal_mfstd_ni(nfsd) = c1
-                        else if (new_ice_fs.eq.2) then
-                            areal_mfstd_ni(nfsd) = c1
-                        else if (new_ice_fs.eq.3) then
-                            call wave_dep_growth(wave_spectrum(i,j,:), wave_hs_in_ice(i,j), new_size)
+ 
+                      if (wave_spec) then
+                        if (wave_hs_in_ice(i,j).gt.puny) & 
+                            call wave_dep_growth(wave_spectrum(i,j,:), new_size)
                             areal_mfstd_ni(new_size) = c1
-                        end if      ! new ice fs
+                      else 
+                            areal_mfstd_ni(1) = c1
+                      end if      ! wave spec
 
                     end if ! entirely new ice or not
 

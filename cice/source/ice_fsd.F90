@@ -43,9 +43,6 @@
       logical (kind=log_kind), public :: & 
          restart_fsd      ! if .true., read fsd tracer restart file
 
-      integer (kind=int_kind), public :: &
-        new_ice_fs     ! how does new ice grow?
- 
       real(kind=dbl_kind), dimension(nfsd), save, public ::  &
          floe_rad_l,    &  ! fsd size lower bound in m (radius)
          floe_rad_c,    &  ! fsd size bin centre in m (radius)
@@ -63,23 +60,14 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat,max_blocks), public, save :: &
         d_an_latg, d_an_latm, d_an_addnew
 
-      real (kind=dbl_kind), public :: &
-        c_mrg            ! constant of proportionality for merging
-                         ! see documentation for details
-
      real(kind=dbl_kind), dimension(nfsd) ::  &
          floe_rad_h,    &  ! fsd size higher bound in m (radius)
          floe_area_l,   &  ! fsd area at lower bound (m^2)
          floe_area_h,   &  ! fsd area at higher bound (m^2)
-         floe_area_c,   &  ! fsd area at bin centre (m^2)
-         floe_area_binwidth, & ! floe area bin width (m^2)
-         area_scaled_l, &  ! area bins scaled so they begin at zero
-         area_scaled_h, &  ! and no binwidth is greater than 1
-         area_scaled_c, &  ! (dimensionless)
-         area_scaled_binwidth
+         floe_area_c       ! fsd area at bin centre (m^2)
 
       integer(kind=int_kind), dimension(nfsd, nfsd) ::  &
-         alpha_mrg
+         iweld
 
 
 
@@ -187,30 +175,18 @@
             write(*,*) floe_area_c
         end if
 
+        ! floe size categories that can combine during welding
+        iweld(:,:) = - 999
+        do a = 1, nfsd
+        do b = 1, nfsd
+            test = floe_area_c(a) + floe_area_c(b)
 
-        ! scaled area for merging
-        floe_area_binwidth = floe_area_h - floe_area_l
-        area_lims(:nfsd) = floe_area_l
-        area_lims(nfsd+1) = floe_area_h(nfsd)
-        area_lims_scaled = (area_lims - area_lims(1))/MAXVAL(floe_area_binwidth)
-
-        area_scaled_h = area_lims_scaled(2:)
-        area_scaled_l = area_lims_scaled(:nfsd)
-        area_scaled_c = (area_scaled_h + area_scaled_l) / c2
-        area_scaled_binwidth = area_scaled_h - area_scaled_l
-
-        ! which floe sizes can combine during merging
-        alpha_mrg(:,:) = - 999
-        do a  = 1, nfsd
-                do b = 1, nfsd
-                        test = area_scaled_h(a) - area_scaled_c(b)
-
-                        do c = 1, nfsd
-                                if ((test.ge.area_scaled_l(c)).and.(test.lt.area_scaled_h(c))) then
-                                        alpha_mrg(a,b) = c + 1  
-                                end if
-                        end do
-                end do
+            do c = 1, nfsd-1
+                if ((test.ge.floe_area_l(c)).and.(test.lt.floe_area_h(c))) &
+                    iweld(a,b) = c 
+            end do
+            if (test.ge.floe_area_l(nfsd)) iweld(a,b) = nfsd
+        end do
         end do
 
 
@@ -448,16 +424,12 @@
 
 
       subroutine wave_dep_growth (local_wave_spec, & 
-                                  wave_hs_in_ice,  &
                                        new_size )
 
        use ice_flux, only: dfreq, freq
 
       real (kind=dbl_kind), dimension(nfreq), intent(in) :: &
            local_wave_spec ! e(f), dimension set in ice_forcing
-
-      real (kind=dbl_kind), intent(in) :: &
-           wave_hs_in_ice ! 
 
       integer (kind=int_kind), intent(out) :: &
            new_size ! index of floe size category in which new floes will growh
@@ -477,9 +449,6 @@
 
       integer (kind=int_kind) :: k
       
-      if (wave_hs_in_ice.lt.puny) then
-          new_size = nfsd
-      else
 
       ! zeroth moment
       mo = SUM(local_wave_spec*dfreq)
@@ -510,7 +479,6 @@
           end if
       end do
 
-      end if
 
       end subroutine wave_dep_growth
 
@@ -712,7 +680,19 @@
          intent(inout) :: &
          d_afsd_merge
 
+
       ! local variables
+
+      real (kind=dbl_kind), parameter :: &
+         aminweld = p1 ! minimum ice concentration likely to weld
+
+      real (kind=dbl_kind), parameter :: &
+         c_weld = 1.0e-8_dbl_kind     
+                          ! constant of proportionality for welding
+	 	          ! total number of floes that weld with another, per square meter,
+			  ! per unit time, in the case of a fully covered ice surface
+	 		  ! units m^-2 s^-1, see documentation for details
+
 
       integer (kind=int_kind) :: &
         t, &
@@ -720,100 +700,96 @@
         kx, ky, kz, a
 
       real (kind=dbl_kind), dimension(nfsd) :: &
-        amfstd_init, amfstd_tmp, coag_pos, coag_neg
+         stability , & ! check for stability
+         nfsd_tmp  , & ! number fsd
+         amfstd_init , & ! initial values
+         amfstd_tmp  , & ! work array
+         gain, loss    ! welding tendencies
 
       real(kind=dbl_kind) :: &
-        subdt, &
-        area_loss, &    !
-        area_loss_mcat, &
-        stability       ! what needs to be one to satisfy
-                        ! stability condition for Smol. eqn.
-
-      integer(kind=int_kind) :: &
-        ndt_mrg         ! number of sub-timesteps required to satisfy
-                        ! stability condition for Smol. eqn.
+         prefac    , & ! multiples kernel
+         kern      , & ! kernel
+         subdt     , & ! subcycling time step for stability (s)
+         elapsed_t     ! elapsed subcycling time
 
 
+    stability = c0
+    prefac = p5
   
     do n = 1, ncat
-                    
-                
+                                    
         d_afsd_merge(:) = c0
         d_amfstd_merge(:,n) = c0
       
         ! If there is some ice in the lower (nfsd-1) categories
         ! and there is freezing potential
         if ((frzmlt.gt.puny).and. & ! if freezing potential
-            (aicen(n).gt.p1).and.  & ! skip low concentrations (unlikely to merge)
+            (aicen(n).gt.aminweld).and.  & ! skip low concentrations (unlikely to merge)
             (SUM(areal_mfstd(:nfsd-1,n)).gt.puny)) then ! some ice in lower (nfsd-1) categories
 
-            ! time step limitations for merging
-            stability = dt * c_mrg * aicen(n) * area_scaled_h(nfsd)
-            ndt_mrg = NINT(stability+p5) ! add .5 to round up                        
-            subdt = dt/FLOAT(ndt_mrg)
-
+            ! save initial values
             amfstd_init(:) = areal_mfstd(:,n)
             amfstd_tmp = amfstd_init
 
-            ! sanity checks
-            if (ABS(SUM(amfstd_init) - c1).gt.puny) stop 'not 1 b4 mrg'
-            if (ANY(amfstd_init.lt.c0-puny)) stop &
-                 'negative mFSTD b4 mrg'
-            if (ANY(amfstd_init.gt.c1+puny)) stop &
-                 'mFSTD>1 b4 mrg'
+            ! in case of minor numerical errors
+            WHERE(amfstd_tmp.lt.puny) amfstd_tmp = c0
+            amfstd_tmp = amfstd_tmp/SUM(amfstd_tmp)
 
-            area_loss_mcat = c0
-            do t = 1, ndt_mrg
-                do kx = 1, nfsd
+            ! adaptive sub-timestep
+            elapsed_t = c0 
+            DO WHILE (elapsed_t < dt) 
 
-                coag_pos(kx) = c0
-                do ky = 1, kx
-                    a = alpha_mrg(kx,ky)
-                    coag_pos(kx) = coag_pos(kx) + &
-                        area_scaled_c(ky) * amfstd_tmp(ky) * aicen(n) * ( &
-                        SUM(amfstd_tmp(a:nfsd)) + &
-                       (amfstd_tmp(a-1)/area_scaled_binwidth(a-1)) * ( &
-                        area_scaled_h(a-1) - area_scaled_h(kx) + area_scaled_c(ky) ))
+               ! calculate sub timestep
+               nfsd_tmp = amfstd_tmp/floe_area_c
+               stability = nfsd_tmp/(c_weld*amfstd_tmp*aicen(n))
+               WHERE (stability.lt.puny) stability = bignum
+               subdt = MINVAL(stability)
+               subdt = MIN(subdt,dt)
 
-                end do ! ky
-                end do ! kx
+               loss(:) = c0
+               gain(:) = c0
 
-                coag_neg(1) = c0 ! cannot gain in smallest cat
-                coag_neg(2:nfsd) = coag_pos(1:nfsd-1)
+               do kx=1,nfsd ! consider loss from this category
+               do ky=1,nfsd ! consider all interaction partners
 
-                amfstd_tmp = amfstd_tmp - subdt*c_mrg*(coag_pos - coag_neg)
+                   k = iweld(kx,ky) ! product of kx and ky
 
-                ! sanity checks
-                 if (ANY(amfstd_tmp.lt.c0-puny)) then
-                        print *, 'amfstd_init ',amfstd_init
-                        print *, 'coag_pos',coag_pos
-                        print *, 'coag_neg',coag_neg
-                        print *, 'amfstd_tmp ',amfstd_tmp
-                        print *, &
-                  'WARNING negative mFSTD mrg, l'
-                 end if
+                   if(k.gt.kx) then
+                   
+                       kern = c_weld * floe_area_c(kx) * aicen(n)
+                      
+                       loss(kx) = loss(kx) + kern*amfstd_tmp(kx)*amfstd_tmp(ky)
 
-                 if (ANY(amfstd_tmp.lt.c0-puny)) &
-                        stop 'negative mFSTD mrg, l'
-                 if (ANY(amfstd_tmp.gt.c1+puny)) &
-                        stop ' mFSTD> 1 mrg, l'
-                 if (ANY(dt*c_mrg*coag_pos.lt.-puny)) &
-                     stop 'not positive'
+                       if (kx.eq.ky) prefac = c1 ! otherwise 0.5
 
-                 ! update
-                 area_loss_mcat = area_loss_mcat + subdt*c_mrg*coag_pos(nfsd)
+                       gain(k) = gain(k) + prefac*kern*amfstd_tmp(kx)*amfstd_tmp(ky)
 
-            end do ! time
-                
-            ! ignore loss in largest cat
-            amfstd_tmp(nfsd) = amfstd_tmp(nfsd) + area_loss_mcat
+                   end if
 
-            area_loss = SUM(amfstd_init) - SUM(amfstd_tmp)
+               end do
+               end do
 
-            ! more sanity checks
-            if (area_loss.lt.-puny) stop 'area gain'
-            if (ABS(area_loss).gt.puny) stop 'area change after correction'
-            
+               ! does largest category lose?
+               if (loss(nfsd).gt.puny) stop 'weld, largest cat losing'
+               if (gain(1).gt.puny) stop 'weld, smallest cat gaining'
+
+               ! update afsd   
+               amfstd_tmp(:) = amfstd_tmp(:) + subdt*(gain(:) - loss(:))
+
+               ! in case of minor numerical errors
+               WHERE(amfstd_tmp.lt.puny) amfstd_tmp = c0
+               amfstd_tmp = amfstd_tmp/SUM(amfstd_tmp)
+
+               ! update time
+               elapsed_t = elapsed_t + subdt
+
+               ! stop if all in largest floe size cat
+               if (amfstd_tmp(nfsd).gt.(c1-puny)) exit 
+
+            END DO ! time
+
+
+           
             ! in case of small numerical errors
             areal_mfstd(:,n) = amfstd_tmp/SUM(amfstd_tmp)
 
@@ -822,9 +798,6 @@
 
             WHERE(areal_mfstd(:,n).lt.c0) areal_mfstd(:,n) = c0
             
-            if (areal_mfstd(1,n).gt.amfstd_init(1)+puny) & 
-                stop 'gain in smallest cat'
-
             ! diagnostic
             d_amfstd_merge(:,n) = areal_mfstd(:,n) - amfstd_init
 

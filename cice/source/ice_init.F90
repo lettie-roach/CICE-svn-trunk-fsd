@@ -70,8 +70,8 @@
           sss_data_type,   sst_data_type, ocn_data_dir, &
           oceanmixed_file, restore_sst,   trestore, &
 ! LR
-          wave_spec_dir, wave_spec_file
-      use ice_wavefracspec, only: wave_spec
+          wave_spec_file
+      use ice_wavefracspec, only: wave_spec, wave_spec_type
 ! LR
       use ice_grid, only: grid_file, gridcpl_file, kmt_file, grid_type, grid_format
       use ice_lvl, only: restart_lvl
@@ -102,7 +102,7 @@
       use shr_file_mod, only: shr_file_setIO
 #endif
 ! CMB LR
-      use ice_fsd, only: restart_fsd, c_mrg, new_ice_fs
+      use ice_fsd, only: restart_fsd
       use ice_domain_size, only: nfsd
       use ice_state, only: tr_fsd, nt_fsd
 ! CMB LR
@@ -143,9 +143,6 @@
 
       namelist /thermo_nml/ &
         kitd,           ktherm,          conduct,                       &
-! LR
-        c_mrg,          new_ice_fs,                                     &
-! LR
         a_rapid_mode,   Rac_rapid_mode,  aspect_rapid_mode,             &
         dSdt_slow_mode, phi_c_slow_mode, phi_i_mushy
 
@@ -176,7 +173,7 @@
         restore_ice,    formdrag,        highfreq,      natmiter,       &
         tfrz_option, &
 ! LR
-        wave_spec,      wave_spec_dir,   wave_spec_file                 
+        wave_spec_type, wave_spec_file                 
 ! LR
 
       namelist /tracer_nml/   &
@@ -233,7 +230,7 @@
       pointer_file = 'ice.restart_file'
       restart_format = 'nc'  ! file format ('bin'=binary or 'nc'=netcdf or 'pio')
       lcdf64       = .false. ! 64 bit offset for netCDF
-      ice_ic       = 'none'      ! no ice LR
+      ice_ic       = 'default'      ! latitude and sst-dependent
       grid_format  = 'bin'          ! file format ('bin'=binary or 'nc'=netcdf)
       grid_type    = 'rectangular'  ! define rectangular grid internally
       grid_file    = 'unknown_grid_file'
@@ -256,10 +253,6 @@
       shortwave = 'default'  ! 'default' or 'dEdd' (delta-Eddington)
       albedo_type = 'default'! or 'constant'
       ktherm = 1             ! 0 = 0-layer, 1 = BL99, 2 = mushy thermo
-! LR
-      c_mrg = 0.01          ! constant of proportionality for floe merging
-      new_ice_fs = 0        ! option for floe size assigned to new ice growth
-! LR
       conduct = 'bubbly'     ! 'MU71' or 'bubbly' (Pringle et al 2007)
       calc_Tsfc = .true.     ! calculate surface temperature
       update_ocn_f = .false. ! include fresh water and salt fluxes for frazil
@@ -303,6 +296,8 @@
                                   ! 'mm_per_sec' = 'mks' = kg/m^2 s
       tfrz_option     = 'mushy'   ! freezing temp formulation
       oceanmixed_ice  = .false.   ! if true, use internal ocean mixed layer
+      wave_spec_type  = 'none'    ! type of wave spectrum forcing
+      wave_spec_file  = ' '       ! wave forcing file name
       ocn_data_format = 'bin'     ! file format ('bin'=binary or 'nc'=netcdf)
       sss_data_type   = 'default'
       sst_data_type   = 'default'
@@ -312,11 +307,6 @@
       trestore        = 90        ! restoring timescale, days (0 instantaneous)
       restore_ice     = .false.   ! restore ice state on grid edges if true
       dbug      = .false.         ! true writes diagnostics for input forcing
-! LR
-      wave_spec_dir = ' '
-      wave_spec_file = ' '
-      wave_spec     = .false.     ! wave spectrum in ice is available for each gridcell
-! LR
       latpnt(1) =  90._dbl_kind   ! latitude of diagnostic point 1 (deg)
       lonpnt(1) =   0._dbl_kind   ! longitude of point 1 (deg)
       latpnt(2) = -65._dbl_kind   ! latitude of diagnostic point 2 (deg)
@@ -725,10 +715,6 @@
       call broadcast_scalar(shortwave,          master_task)
       call broadcast_scalar(albedo_type,        master_task)
       call broadcast_scalar(ktherm,             master_task)
-! LR
-      call broadcast_scalar(c_mrg,              master_task)      
-      call broadcast_scalar(new_ice_fs,         master_task)
-! LR
       call broadcast_scalar(conduct,            master_task)
       call broadcast_scalar(R_ice,              master_task)
       call broadcast_scalar(R_pnd,              master_task)
@@ -766,6 +752,9 @@
       call broadcast_scalar(fbot_xfer_type,     master_task)
       call broadcast_scalar(precip_units,       master_task)
       call broadcast_scalar(oceanmixed_ice,     master_task)
+      call broadcast_scalar(wave_spec,          master_task)
+      call broadcast_scalar(wave_spec_type,     master_task)
+      call broadcast_scalar(wave_spec_file,     master_task)
       call broadcast_scalar(tfrz_option,        master_task)
       call broadcast_scalar(ocn_data_format,    master_task)
       call broadcast_scalar(sss_data_type,      master_task)
@@ -776,11 +765,6 @@
       call broadcast_scalar(trestore,           master_task)
       call broadcast_scalar(restore_ice,        master_task)
       call broadcast_scalar(dbug,               master_task)
-! LR
-      call broadcast_scalar(wave_spec_dir,      master_task)
-      call broadcast_scalar(wave_spec_file,     master_task)
-      call broadcast_scalar(wave_spec,          master_task)
-! LR
       call broadcast_array (latpnt(1:2),        master_task)
       call broadcast_array (lonpnt(1:2),        master_task)
       call broadcast_scalar(runid,              master_task)
@@ -819,6 +803,13 @@
 #ifdef CCSMCOUPLED
       pointer_file = trim(pointer_file) // trim(inst_suffix)
 #endif
+
+      if (tr_fsd) then
+         if (trim(wave_spec_type) /= 'none') wave_spec = .true.
+      else
+         wave_spec = .false.
+      endif
+
 
       !-----------------------------------------------------------------
       ! spew
@@ -951,10 +942,6 @@
          write(nu_diag,1005) ' phi_c_slow_mode           = ', phi_c_slow_mode
          write(nu_diag,1005) ' phi_i_mushy               = ', phi_i_mushy
          endif
-! LR        
-         write(nu_diag,1005) ' c_mrg                       = ', c_mrg
-         write(nu_diag,1020) ' new_ice_fs                  = ', new_ice_fs
-! LR         
          write(nu_diag,1030) ' atmbndy                   = ', &
                                trim(atmbndy)
          write(nu_diag,1010) ' formdrag                  = ', formdrag
@@ -982,6 +969,11 @@
                                trim(fbot_xfer_type)
          write(nu_diag,1010) ' oceanmixed_ice            = ', &
                                oceanmixed_ice
+         write(nu_diag,1010) ' wave_spec                 = ', wave_spec
+         if (wave_spec) then
+            write(nu_diag,*)    ' wave_spec_type            = ', wave_spec_type
+            write(nu_diag,*)    ' wave_spec_file            = ', wave_spec_file
+         endif
          write(nu_diag,*)    ' tfrz_option               = ', &
                                trim(tfrz_option)
          if (trim(sss_data_type) == 'ncar' .or. &

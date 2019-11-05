@@ -56,7 +56,10 @@
           nx = 10000                          ! number of points in domain
  
       logical (kind=log_kind), public :: &
-         wave_spec      
+         wave_spec
+
+      character (len=char_len), public :: & 
+         wave_spec_type      
 
 !=======================================================================
 
@@ -153,7 +156,7 @@
      use ice_blocks, only: block, get_block
      use ice_state, only: nt_fsd, aice, aicen, vice, &
                           trcrn
-     use ice_flux, only: wave_spectrum, wave_hs_in_ice
+     use ice_flux, only: wave_spectrum
      use ice_fsd, only: d_afsd_wave, d_amfstd_wave
  
      ! local variables
@@ -177,15 +180,11 @@
          do i = ilo, ihi
 
             d_afsd_wave(i,j,:,iblk) = c0
-            ! LR this condition is FOR TESTING ONLY when using dummy wave spectrum
-            ! do not use for actual runs!!
-            if (aice(i,j,iblk).lt.0.8_dbl_kind) &
 
             call wave_frac_fsd(aice(i,j,iblk),  vice(i,j,iblk),        & ! in 
                                aicen(i,j,:,iblk),                      & ! in
                                wave_spectrum(i,j,:,iblk),              & ! in
                                trcrn(i,j,nt_fsd:nt_fsd+nfsd-1,:,iblk), & ! inout
-                               wave_hs_in_ice(i,j,iblk),               & ! out
                                d_afsd_wave(i,j,:,iblk),                & ! out
                                d_amfstd_wave(i,j,:,:,iblk)             ) ! out
             
@@ -213,7 +212,6 @@
                               aicen,              & ! in
                               wave_spectrum,      & ! in
                               trcrn,              & ! inout
-                              wave_hs_in_ice,     & ! out
                               d_afsd_wave,        & ! out
                               d_amfstd_wave       ) ! out
             
@@ -233,9 +231,6 @@
 
      real (kind=dbl_kind), dimension(nfsd,ncat), intent(inout) :: &
          trcrn
-
-     real (kind=dbl_kind), intent(out) :: &
-         wave_hs_in_ice
 
      real (kind=dbl_kind), dimension(nfsd), intent(out) :: &
          d_afsd_wave
@@ -273,7 +268,6 @@
     ! initialize 
     d_afsd_wave(:) = c0
     d_amfstd_wave(:,:) = c0
-    wave_hs_in_ice = c0
     fracture_hist(:) = c0
 
     ! sanity check
@@ -281,9 +275,6 @@
 
     ! do not try to fracture for minimal ice concentration or zero wave spectrum
     if ((aice.gt.p01).and.(.NOT.(ALL(wave_spectrum(:).lt.puny)))) then
-
-        ! save for diagnostics
-        wave_hs_in_ice = c4*SQRT(SUM(wave_spectrum(:)*dfreq(:)))
 
         hbar = vice / aice
 
@@ -323,7 +314,10 @@
                     ! adaptive sub-timestep
                     elapsed_t = c0
                     cons_error = c0
+                    nsubt = 0
                     DO WHILE (elapsed_t.lt.dt)
+
+                         nsubt = nsubt + 1
 
                          ! calculate d_amfstd using current afstd
                          d_amfstd_tmp = get_damfstd_wave(amfstd_tmp, fracture_hist, frac)
@@ -333,6 +327,12 @@
                          subdt = get_subdt_wave(amfstd_tmp, d_amfstd_tmp)
                          subdt = MIN(subdt, dt) ! cannot be greater than CICE timestep
 
+			 ! check in case wave fracture struggles to converge
+			 if (nsubt>100) then
+				  print *, &
+				      'wave frac taking a while to converge....'
+			 end if
+	 
                          ! update amfstd and elpased time
                          amfstd_tmp = amfstd_tmp + subdt * d_amfstd_tmp(:)
 
@@ -483,21 +483,22 @@
      ! loop over n. realizations of SSH
      do i=1,loopcts
 
-         ! random phase for each Fourier component
-         ! varies in each j loop
-         ! LR took out the call to random number
-         ! and set phase to constant
-         ! Constant phase should NOT BE USED for actual runs
-         rand_array(:) = p5
-         !!call RANDOM_NUMBER(rand_array)
+         ! Phase for each Fourier component may be constant or
+         ! a random phase that varies in each i loop
+         ! See documentation for discussion
+         if (trim(wave_spec_type)=='random') then
+            call RANDOM_NUMBER(rand_array)
+         else
+            rand_array(:) = p5
+         endif
          phi = c2*pi*rand_array
  
-         do j=1,nx
-             !SSH field in space (sum over wavelengths, no attenuation)
-             summand = spec_coeff*COS(2*pi*X(j)/lambda+phi)
-             eta(j)=SUM(summand)
+         do j = 1, nx
+            ! SSH field in space (sum over wavelengths, no attenuation)
+            summand = spec_coeff*COS(2*pi*X(j)/lambda+phi)
+            eta(j)=SUM(summand)
          end do
-         
+
          if ((.NOT.(ALL(eta.eq.c0))).and.(hbar.gt.puny)) then 
             call get_fraclengths(X, eta, fraclengths, hbar , e_stop)
          end if
@@ -676,9 +677,8 @@
                         if (is_triplet(j)) then
                                 delta_pos = X(j_pos) - X(j)
                                 delta = X(j) - X(j_neg)
-                                strain(j) = (hbar/c2) *(eta(j_neg)*delta_pos - &
-                                        eta(j)*(delta_pos+delta) + eta(j)*delta ) &
-                                        /(delta*delta_pos*(delta+delta_pos))
+                                strain(j) = p5*hbar*(eta(j_neg) - eta(j)) &
+                                  / (delta*(delta+delta_pos))
 
 
                                 if (strain(j).gt.straincrit) then

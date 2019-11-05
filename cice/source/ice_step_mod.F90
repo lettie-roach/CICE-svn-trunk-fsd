@@ -781,7 +781,7 @@
 ! LR CMB
       use ice_flux, only: rside_itd, flateral, &
                           lead_area, latsurf_area, vlateral, &
-                          sst, Tf, &
+                          sst, Tf, dfreq, &
                           G_radial, wave_spectrum, wave_hs_in_ice                
        use ice_fsd, only:icepack_renormfsd, &
                          icepack_mergefsd, &
@@ -907,7 +907,6 @@
                                      this_block%j_glob(jstop) 
                call abort_ice ('ice: Linear ITD error')
             endif
-
             endif ! icells
 
          endif  ! kitd = 1
@@ -927,6 +926,10 @@
                icells = icells + 1
                indxi(icells) = i
                indxj(icells) = j
+
+               ! compute wave sig ht here to pass to add new ice
+               wave_hs_in_ice(i,j,iblk) = c4*SQRT(SUM(wave_spectrum(i,j,:,iblk)*dfreq(:)))
+
             endif
          enddo               ! i
          enddo               ! j
